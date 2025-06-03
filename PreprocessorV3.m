@@ -1,5 +1,8 @@
 % Image pre-processor for ResNet (For Training - With Labeling)
 
+
+% comment!
+
 % Define the folder where the images are
 imageFolder = 'C:\Users\Christoph Neisess\Documents\University Things\UMD 2018-2019\ENAE398H\run_4017';
 files = dir(fullfile(imageFolder, '*.tif'));
