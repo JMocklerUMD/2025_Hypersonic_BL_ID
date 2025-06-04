@@ -109,7 +109,7 @@ print('Begin writing training data to numpy array')
 WP_io = []
 #SM_bounds_Array = []
 Imagelist = []
-N_img = 125
+N_img = 500
 
 for i in range(N_img):
     curr_line = i;
@@ -182,7 +182,7 @@ WP_io = [element for i, element in enumerate(WP_io) if i not in omit_array]
 
 
 #%% Resizes the arrays
-# Imagelist,WP_io = Shuffler(Imagelist, WP_io)
+Imagelist,WP_io = Shuffler(Imagelist, WP_io)
 # Keras should shuffle our images for us - probably don't need to do!
 Imagelist = np.array(Imagelist)
 WP_io = np.array(WP_io)
