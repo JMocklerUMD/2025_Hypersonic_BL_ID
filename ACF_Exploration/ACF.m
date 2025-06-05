@@ -27,8 +27,21 @@ image_data = table2array(image_data_table);
 %code to create .tiff files
 %probably loses some data
 %only works up to img2069 because image size decreases after that
-%{
-for i = 1:size(file,1)
+count = 0; %number of images with second-mode waves
+for i = 1:2069
+if yesNo2Mode(i) == 'Yes'
+    if ~isequal(bbox(i,:),[0 0 0 0])
+    count = count + 1;
+    end
+end
+end
+
+imgNum = 1;
+indexYes = zeros(count,1);
+
+for i = 1:2069   %size(file,1)
+    if yesNo2Mode(i) == 'Yes'
+        if ~isequal(bbox(i,:),[0 0 0 0])
 %funtion to map onto uint16 values (thanks ChatGPT among other things)
 imgMatrix = reshape(image_data(i,:), [pixelHeight(i), pixelLength(i)]);
 imgMatrix = imgMatrix';
@@ -36,21 +49,30 @@ imgMatrix = imgMatrix';
 imgMatrix = maprange(imgMatrix,min,max);
 imgMatrix = uint16(imgMatrix);
 %imshow(imgMatrix,[])
-str = "C:\Users\tyler\Documents\GitHub\2025_Hypersonic_BL_ID\ACF_Exploration\tiffImages\" + sprintf("img%d.tiff",i);
+str = "C:\Users\tyler\Documents\GitHub\2025_Hypersonic_BL_ID\ACF_Exploration\yesTiffImages\" + sprintf("img%d.tiff",imgNum);
 imwrite(imgMatrix,str);
 %write to preexisting folder
+indexYes(i) = imgNum;
+        end
+    end
+    imgNum = imgNum + 1; %I think this part is unnecessary 
 end
-%}
+
 
 %create ground truth: images with bounding boxes and labels
-tiffDatastore = imageDatastore('C:\Users\tyler\Documents\GitHub\2025_Hypersonic_BL_ID\ACF_Exploration\tiffImages\');
+tiffDatastore = imageDatastore('C:\Users\tyler\Documents\GitHub\2025_Hypersonic_BL_ID\ACF_Exploration\yesTiffImages\');
+
+%count -> number of yesses
+
+
 dataSource = groundTruthDataSource(tiffDatastore);
 ldc = labelDefinitionCreator();
 addLabel(ldc,'secondModeWave',labelType.Rectangle);
 labelNames = {'secondModeWave'};
-secondModeWaveTruth = zeros(2069,4);
-for i = 1:2069
-        secondModeWaveTruth(i,:) = [bbox(i,:)];
+secondModeWaveTruth = zeros(count,4);
+for i = 1:count
+        disp(i)
+        secondModeWaveTruth(i,:) = [bbox(indexYes(i),:)];
 end
 
 labelData = table(secondModeWaveTruth,'VariableNames',labelNames);
@@ -66,8 +88,8 @@ acf = trainACFObjectDetector(trainingImgWithLabels);
 img1 = read(tiffDatastore); %read function reads sequentially from datastore
 [predictBbox,confidence] = detect(acf,img1); 
 img1Ann = insertObjectAnnotation(img1,'rectangle',predictBbox,confidence);
-img1Both = insertObjectAnnotation(img1Ann,'rectangle',bbox(1,:),'manual');
-
+img1Both = insertObjectAnnotation(img1Ann,'rectangle',bbox(1,:),'manual','AnnotationColor','blue');
+imshow(img1Both)
 
 %files = imList.Files
 %inside objectDetectorTrainingData: objectDetectorTrainingData(gTruth,SamplingFactor=10,NamePrefix="turtleFrame",WriteLocation="trainingImages"
