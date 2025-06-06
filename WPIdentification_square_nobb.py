@@ -1,5 +1,9 @@
 # Version 2 of a CNN used to identify second-mode waves using ResNet50 for feature extraction
 
+#CHANGE THIS VAlUES (see also lines ~22 and ~205)
+pixelSize = 224
+
+
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button
 
@@ -14,7 +18,8 @@ import tensorflow as tf
 
 from keras import optimizers
 
-from keras.applications import resnet50, vgg16
+#CHANGE THIS VALUE
+from keras.applications import ResNet50
 
 from keras.callbacks import EarlyStopping
 
@@ -69,14 +74,14 @@ def progress_bar(iteration, total, prefix = '', suffix = '', decimals = 1, lengt
 
 # This function tells our feature extractor to do its thing
 def get_bottleneck_features(model, input_imgs):
-	print('Getting Feature Data From ResNet...')
+	print('Getting Feature Data From Model...')
 	features = model.predict(input_imgs, verbose = 1)
 	return features
 
 def img_preprocess(input_image):
     input_image = np.stack((input_image,)*3,axis = -1)
     input_image = array_to_img(input_image)
-    input_image = input_image.resize((224,224))
+    input_image = input_image.resize((pixelSize,pixelSize))
     input_image = img_to_array(input_image)
     #input_image = (input_image / 127.5) - 1
     return input_image
@@ -92,7 +97,7 @@ that can be passed to the keras NN trainer
 print('Reading training data file')
 
 # Write File Name
-file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\training_data_explicit.txt'
+file_name = 'C:\\Users\\tyler\\Desktop\\NSSSIP25\\Training Data ML Wave-Packet Identification-selected\\training_data_explicit.txt'
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()
@@ -135,7 +140,7 @@ for i in range(N_img):
         print(f"Skipping image at line {i+1} — unexpected size {full_image.shape}")
         continue
     
-    slice_width = 64
+    slice_width = 256
     height, width = full_image.shape
     num_slices = width // slice_width
     
@@ -174,7 +179,7 @@ for i in range(N_img):
 #%% Catches any arrays that are not correct size
 omit_array = []
 for i in range(len(Imagelist)):
-    if Imagelist[i].shape != (64, 64):
+    if Imagelist[i].shape != (64, slice_width):
         omit_array.append(i)
 
 Imagelist = [element for i, element in enumerate(Imagelist) if i not in omit_array]
@@ -195,15 +200,16 @@ prior to passing through one last NN layer that we will define. Initialize
 this code block once!
 """
 
-# Bringing in ResNet50 to use as our feature extractor
-model1 = resnet50.ResNet50(include_top = False, weights ='imagenet', input_shape = (224,224,3))
+# Bringing in model to use as our feature extractor
+# CHANGE HERE
+model1 = ResNet50(include_top = False, weights ='imagenet', input_shape = (pixelSize,pixelSize,3))
 output = model1.output
 output = tf.keras.layers.Flatten()(output)
-resnet_model = Model(model1.input,output)
+model = Model(model1.input,output)
 
 # Locking in the weights of the feature detection layers
-resnet_model.trainable = False
-for layer in resnet_model.layers:
+model.trainable = False
+for layer in model.layers:
 	layer.trainable = False
     
 # Split the images - do this once to avoid memory allocation issues!
@@ -213,8 +219,8 @@ trainlbls = WP_io
 
 trainimgs, testimgs, trainlbs, testlbls = train_test_split(Imagelist_resized,WP_io, test_size=0.2, random_state=69)
 
-trainimgs_res = get_bottleneck_features(resnet_model, trainimgs)
-testimgs_res = get_bottleneck_features(resnet_model, testimgs)
+trainimgs_res = get_bottleneck_features(model, trainimgs)
+testimgs_res = get_bottleneck_features(model, testimgs)
 
 #%%
 '''
@@ -226,7 +232,7 @@ images are then passed through this network and classified.
 # change our architecture and view the results
 
 # Generate an input shape for our classification layers
-input_shape = resnet_model.output_shape[1]
+input_shape = model.output_shape[1]
 
 # Now we'll add new classification layers
 model = Sequential()
