@@ -36,12 +36,14 @@ if yesNo2Mode(i) == 'Yes'
 end
 end
 
-imgNum = 1;
 indexYes = zeros(count,1);
+n=1;
 
 for i = 1:2069   %size(file,1)
     if yesNo2Mode(i) == 'Yes'
         if ~isequal(bbox(i,:),[0 0 0 0])
+            indexYes(n) = i;
+            n = n +1;
 %funtion to map onto uint16 values (thanks ChatGPT among other things)
 imgMatrix = reshape(image_data(i,:), [pixelHeight(i), pixelLength(i)]);
 imgMatrix = imgMatrix';
@@ -49,13 +51,11 @@ imgMatrix = imgMatrix';
 imgMatrix = maprange(imgMatrix,min,max);
 imgMatrix = uint16(imgMatrix);
 %imshow(imgMatrix,[])
-str = "C:\Users\tyler\Documents\GitHub\2025_Hypersonic_BL_ID\ACF_Exploration\yesTiffImages\" + sprintf("img%d.tiff",imgNum);
+str = "C:\Users\tyler\Documents\GitHub\2025_Hypersonic_BL_ID\ACF_Exploration\yesTiffImages\" + sprintf("img%d.tiff",i);
 imwrite(imgMatrix,str);
 %write to preexisting folder
-indexYes(i) = imgNum;
         end
     end
-    imgNum = imgNum + 1; %I think this part is unnecessary 
 end
 
 
@@ -71,7 +71,7 @@ addLabel(ldc,'secondModeWave',labelType.Rectangle);
 labelNames = {'secondModeWave'};
 secondModeWaveTruth = zeros(count,4);
 for i = 1:count
-        disp(i)
+        %disp(i)
         secondModeWaveTruth(i,:) = [bbox(indexYes(i),:)];
 end
 
@@ -84,10 +84,11 @@ gTruth = groundTruth(dataSource,labelDefs,labelData);
 trainingImgWithLabels = combine(trainingImgList,bboxLabels);
 
 %create aggregate channel feature (ACF) object detector
-acf = trainACFObjectDetector(trainingImgWithLabels);
-img1 = read(tiffDatastore); %read function reads sequentially from datastore
+acf = trainACFObjectDetector(trainingImgWithLabels); %NumStages = 4 (by default - can change)
+img1 = read(tiffDatastore); %read function reads sequentially from datastore - probably only include images from training data now that I think of it
 [predictBbox,confidence] = detect(acf,img1); 
-img1Ann = insertObjectAnnotation(img1,'rectangle',predictBbox,confidence);
+[highPredictBbox,highConfidence] = selectStrongestBbox(predictBbox,confidence,OverlapThreshold=0.1);
+img1Ann = insertObjectAnnotation(img1,'rectangle',highPredictBbox,highConfidence);
 img1Both = insertObjectAnnotation(img1Ann,'rectangle',bbox(1,:),'manual','AnnotationColor','blue');
 imshow(img1Both)
 
