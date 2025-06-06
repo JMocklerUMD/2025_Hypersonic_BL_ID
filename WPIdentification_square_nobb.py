@@ -1,7 +1,7 @@
 # Version 2 of a CNN used to identify second-mode waves using ResNet50 for feature extraction
 
 #CHANGE THIS VAlUES (see also lines ~22 and ~205)
-pixelSize = 384
+pixelSize = 224
 
 
 import matplotlib.pyplot as plt
@@ -19,7 +19,7 @@ import tensorflow as tf
 from keras import optimizers
 
 #CHANGE THIS VALUE
-from keras.applications import EfficientNetV2S
+from keras.applications import ResNet50
 
 from keras.callbacks import EarlyStopping
 
@@ -114,7 +114,7 @@ print('Begin writing training data to numpy array')
 WP_io = []
 #SM_bounds_Array = []
 Imagelist = []
-N_img = 500
+N_img = 125
 
 for i in range(N_img):
     curr_line = i;
@@ -140,7 +140,7 @@ for i in range(N_img):
         print(f"Skipping image at line {i+1} — unexpected size {full_image.shape}")
         continue
     
-    slice_width = 320
+    slice_width = 128
     height, width = full_image.shape
     num_slices = width // slice_width
     
@@ -202,10 +202,13 @@ this code block once!
 
 # Bringing in model to use as our feature extractor
 # CHANGE HERE
-model1 = EfficientNetV2S(include_top = False, weights ='imagenet', input_shape = (pixelSize,pixelSize,3))
+model1 = ResNet50(include_top = False, weights ='imagenet', input_shape = (pixelSize,pixelSize,3))
 output = model1.output
 output = tf.keras.layers.Flatten()(output)
 model = Model(model1.input,output)
+
+#load pretrained inat2021_mini_supervised_from_scratch weights from https://github.com/visipedia/newt/blob/main/benchmark/README.md
+#model.load_weights('C:/Users/tyler/Desktop/NSSSIP25/cvpr21_newt_pretrained_models.tar/cvpr21_newt_pretrained_models/tf/inat2021_mini/simclr_v2/#######_resnet50_simclr_v1_inat20_no_top.h5')
 
 # Locking in the weights of the feature detection layers
 model.trainable = False
