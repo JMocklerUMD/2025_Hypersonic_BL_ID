@@ -81,6 +81,26 @@ def img_preprocess(input_image):
     #input_image = (input_image / 127.5) - 1
     return input_image
 
+def img_filter(input_image):
+    f = np.fft.fft2(input_image)
+    fshift = np.fft.fftshift(f)
+    rows, cols = input_image.shape
+    crow, ccol = rows//2, cols//2
+    x_low = 20
+    x_high = 45
+    y_low = 4
+    y_high = 20
+    mask = np.zeros((rows, cols), dtype=np.uint8)
+    for i in range(rows):
+        for j in range(cols):
+            dx = abs(j - ccol)
+            dy = abs(i - crow)
+            if x_low < dx < x_high and y_low < dy < y_high:  # limit vertical range too
+                mask[i, j] = 1                
+    fshift_filtered = fshift * mask
+    f_ishift = np.fft.ifftshift(fshift_filtered)
+    img_back = np.abs(np.fft.ifft2(f_ishift))
+    return img_back
 
 #%% Read training data file
 '''
@@ -135,7 +155,10 @@ for i in range(N_img):
         print(f"Skipping image at line {i+1} — unexpected size {full_image.shape}")
         continue
     
-    slice_width = 64
+    # Filter the images with a Fourier transform
+    full_image=img_filter(full_image)
+    
+    slice_width = 128
     height, width = full_image.shape
     num_slices = width // slice_width
     
@@ -174,7 +197,7 @@ for i in range(N_img):
 #%% Catches any arrays that are not correct size
 omit_array = []
 for i in range(len(Imagelist)):
-    if Imagelist[i].shape != (64, 64):
+    if Imagelist[i].shape != (64, 128):
         omit_array.append(i)
 
 Imagelist = [element for i, element in enumerate(Imagelist) if i not in omit_array]
