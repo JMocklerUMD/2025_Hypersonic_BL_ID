@@ -156,10 +156,19 @@ for i in range(N_img):
         continue
     
     # Filter the images with a Fourier transform
-    full_image=img_filter(full_image)
+    filtered_image=img_filter(full_image)
+    
+    if i % 10 == 0:
+        plt.subplot(2,1,1)
+        plt.imshow(full_image,cmap='gray')
+        plt.title('Image '+str(i))
+        plt.subplot(2,1,2)
+        plt.imshow(filtered_image)
+        #plt.title('Filtered Image '+str(i))
+        plt.show()
     
     slice_width = 128
-    height, width = full_image.shape
+    height, width = filtered_image.shape
     num_slices = width // slice_width
     
     # Only convert bounds to int if not sm_check.startswith('X')
@@ -174,7 +183,7 @@ for i in range(N_img):
         x_end = (i + 1) * slice_width
     
         # Slice the image
-        image = full_image[:, x_start:x_end]
+        image = filtered_image[:, x_start:x_end]
         image_size = image.shape
         Imagelist.append(image)
     
