@@ -92,7 +92,7 @@ that can be passed to the keras NN trainer
 print('Reading training data file')
 
 # Write File Name
-file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\training_data_explicit.txt'
+file_name = r"C:\Users\tyler\Desktop\NSSSIP25\Training Data ML Wave-Packet Identification-selected\training_data_explicit.txt"
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()
@@ -196,10 +196,11 @@ this code block once!
 """
 
 # Bringing in ResNet50 to use as our feature extractor
-model1 = resnet50.ResNet50(include_top = False, weights ='imagenet', input_shape = (224,224,3))
+model1 = resnet50.ResNet50(include_top = False, input_shape = (224,224,3))
 output = model1.output
 output = tf.keras.layers.Flatten()(output)
 resnet_model = Model(model1.input,output)
+resnet_model.load_weights(r'C:\Users\tyler\AppData\Local\Temp\f17d6e56-077b-430a-8de5-4a86e97bf953_cvpr21_newt_pretrained_models.tar.gz.953\cvpr21_newt_pretrained_models\tf\inat2021\simclr_v1_500_epochs\1312000_resnet50_simclr_v1_inat20_no_top.h5', by_name=True, skip_mismatch=True)
 
 # Locking in the weights of the feature detection layers
 resnet_model.trainable = False
