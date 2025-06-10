@@ -36,7 +36,7 @@ import h5py
 import numpy as np
 
 from sklearn.model_selection import train_test_split
-#import cv2
+import cv2
 
 
 #%% Function calls
@@ -102,6 +102,12 @@ def img_filter(input_image):
     img_back = np.abs(np.fft.ifft2(f_ishift))
     return img_back
 
+def detect_edges(input_image):
+    img_norm = cv2.normalize(input_image, None, 0, 255, cv2.NORM_MINMAX)
+    img_uint8 = img_norm.astype(np.uint8)
+    edges = cv2.Canny(img_uint8, 150, 250)
+    return edges
+
 #%% Read training data file
 '''
 Preprocessing: the following block of codes accept the image data from a 
@@ -156,7 +162,8 @@ for i in range(N_img):
         continue
     
     # Filter the images with a Fourier transform
-    filtered_image=img_filter(full_image)
+    #filtered_image=img_filter(full_image)
+    filtered_image=detect_edges(full_image)
     
     if i % 10 == 0:
         plt.subplot(2,1,1)
