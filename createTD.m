@@ -1,4 +1,4 @@
-folder_path = 'C:\Users\cathe\Documents\MATLAB\trainML\cine_ML';
+folder_path = 'C:\Users\Joseph Mockler\Documents\test_imgs';
 
 % read in files in folder
 images = dir(fullfile(folder_path, '*.tif'));
