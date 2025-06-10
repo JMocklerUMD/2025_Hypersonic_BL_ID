@@ -12,22 +12,23 @@ import random
 
 import tensorflow as tf
 
-from keras import optimizers
+from tensorflow.keras import optimizers
 
-from keras.applications import resnet50, vgg16
+from tensorflow.keras.applications import resnet50, vgg16
 
-from keras.callbacks import EarlyStopping
+from tensorflow.keras.callbacks import EarlyStopping
 
-from keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout, InputLayer
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout, InputLayer
 
-from keras.models import Model
-from keras.models import Sequential
+from tensorflow.keras.models import Model
+from tensorflow.keras.models import Sequential
 
-from keras.preprocessing import image
+from tensorflow.keras.preprocessing import image
 
-from keras.preprocessing.image import load_img
-from keras.preprocessing.image import img_to_array
-from keras.preprocessing.image import array_to_img
+from tensorflow.keras.preprocessing.image import load_img
+from tensorflow.keras.preprocessing.image import img_to_array
+from tensorflow.keras.preprocessing.image import array_to_img
+
 
 import matplotlib.pyplot as plt
 
@@ -37,6 +38,11 @@ import numpy as np
 
 from sklearn.model_selection import train_test_split
 #import cv2
+
+from tensorflow.keras.applications.resnet50 import preprocess_input
+
+
+import tensorflow_hub as hub
 
 
 #%% Function calls
@@ -78,6 +84,7 @@ def img_preprocess(input_image):
     input_image = array_to_img(input_image)
     input_image = input_image.resize((224,224))
     input_image = img_to_array(input_image)
+    input_image = preprocess_input(input_image) #resnet50 preprocessing
     #input_image = (input_image / 127.5) - 1
     return input_image
 
@@ -92,7 +99,7 @@ that can be passed to the keras NN trainer
 print('Reading training data file')
 
 # Write File Name
-file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\training_data_explicit.txt'
+file_name = r'C:\Users\tyler\Desktop\NSSSIP25\Training Data ML Wave-Packet Identification-selected\training_data_explicit.txt'
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()
@@ -197,11 +204,14 @@ this code block once!
 
 # Bringing in ResNet50 to use as our feature extractor
 model1 = resnet50.ResNet50(include_top = False, weights ='imagenet', input_shape = (224,224,3))
+#hub_model = hub.KerasLayer("https://www.kaggle.com/models/google/bit/TensorFlow2/s-r50x1/1",input_shape=(224, 224, 3),trainable=False)
+#model1 = tf.keras.Sequential([hub_model,tf.keras.layers.Dense(10, activation='softmax')]) #from ChatGPT
 output = model1.output
 output = tf.keras.layers.Flatten()(output)
 resnet_model = Model(model1.input,output)
+#resnet_model.load_weights(r'C:\Users\tyler\AppData\Local\Temp\8364a17c-fae4-4bc1-ae19-71b4506ef86e_cvpr21_newt_pretrained_models.tar.gz.86e\cvpr21_newt_pretrained_models\tf\inat2021_mini\simclr_v2\488282_resnet50_simclr_v2_inat20_mini_no_top.h5', by_name=True, skip_mismatch=True)
 
-# Locking in the weights of the feature detection layers
+# Locking in the weights of the feature detection layers (see hub.KerasLayer)
 resnet_model.trainable = False
 for layer in resnet_model.layers:
 	layer.trainable = False
