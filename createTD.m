@@ -1,4 +1,4 @@
-folder_path = "C:\Users";
+folder_path = 'C:\Users\Joseph Mockler\Documents\test_imgs';
 
 % read in files in folder
 images = dir(fullfile(folder_path, '*.tif'));
@@ -27,12 +27,12 @@ for i = 1:length(images)
     %processed{i} = imadjust(imgaussfilt(img, 1));
 end
 %%
-save_file = fullfile(folder_path, 'partial_results.mat');
 
 if isfile(save_file)
     load(save_file, 'results', 'start_frame');
     disp(['Resuming from frame ' num2str(start_frame)])
 else
+    save_file = fullfile(folder_path, 'partial_results.mat');
     results = cell(length(images), 8);
     start_frame = 1;
 end
@@ -48,6 +48,7 @@ while i <= length(images)
     if wp == 3
         disp('Exiting and saving progress...');
         save(save_file, 'results', 'start_frame')
+        close;
         break;
     end
 
@@ -115,6 +116,6 @@ for i = 1:length(images)
 end
 fclose(fileID);
 
-if isfile(save_file)
+if start_frame > length(images) && isfile(save_file)
     delete(save_file);
 end
