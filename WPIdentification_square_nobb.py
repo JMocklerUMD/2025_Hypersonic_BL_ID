@@ -249,7 +249,7 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
                     activation = 'relu',                        # Activation function at each node
                     input_dim = input_shape,                    # Input controlled by feature vect from ResNet50
                     kernel_regularizer=regularizers.L1L2(l1=0.01, l2=0.01),     # Regularization penality term
-                    bias_regularizer=regularizers.L2(1e-4)))                    # Additional regularization penalty term
+                    bias_regularizer=regularizers.L2(0.01)))                    # Additional regularization penalty term
     
     model.add(Dropout(0.5))     # Add dropout to make the system more robust
     model.add(Dense(1, activation = 'sigmoid'))     # Add final classification layer
