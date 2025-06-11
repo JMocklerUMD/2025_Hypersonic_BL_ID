@@ -1,4 +1,4 @@
-folder_path = 'C:\Users\cathe\Documents\MATLAB\trainML\cine_ML';
+folder_path = "C:\Users\tyler\Desktop\NSSSIP25\run33";
 
 % read in files in folder
 images = dir(fullfile(folder_path, '*.tif'));
@@ -23,8 +23,8 @@ processed = cell(1, length(images));
 for i = 1:length(images)
     img = double(image_list{i});
     img = mean_img - img;
-    img = rescale(img, 0, 1);
-    processed{i} = imadjust(imgaussfilt(img, 1));
+    processed{i} = rescale(img, 0, 1);
+    %processed{i} = imadjust(imgaussfilt(img, 1));
 end
 %%
 save_file = fullfile(folder_path, 'partial_results.mat');
