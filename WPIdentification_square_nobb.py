@@ -35,7 +35,10 @@ import h5py
 
 import numpy as np
 
+from skimage import exposure
+
 from sklearn.model_selection import train_test_split
+
 import cv2
 
 
@@ -108,6 +111,12 @@ def detect_edges(input_image):
     edges = cv2.Canny(img_uint8, 150, 250)
     return edges
 
+def img_exposure(input_image):
+    img_back = input_image.astype(np.float32)
+    image_norm = (img_back - img_back.min()) / (img_back.max() - img_back.min())
+    image_eq = exposure.equalize_adapthist(image_norm, clip_limit=0.0075)
+    return image_eq
+
 #%% Read training data file
 '''
 Preprocessing: the following block of codes accept the image data from a 
@@ -135,7 +144,7 @@ print('Begin writing training data to numpy array')
 WP_io = []
 #SM_bounds_Array = []
 Imagelist = []
-N_img = 500
+N_img = 250
 
 for i in range(N_img):
     curr_line = i;
@@ -162,8 +171,9 @@ for i in range(N_img):
         continue
     
     # Filter the images with a Fourier transform
-    #filtered_image=img_filter(full_image)
-    filtered_image=detect_edges(full_image)
+    filtered_image=img_filter(full_image)
+    filtered_image=img_exposure(filtered_image)
+    #filtered_image=detect_edges(full_image)
     
     if i % 10 == 0:
         plt.subplot(2,1,1)
@@ -174,7 +184,7 @@ for i in range(N_img):
         #plt.title('Filtered Image '+str(i))
         plt.show()
     
-    slice_width = 128
+    slice_width = 64
     height, width = filtered_image.shape
     num_slices = width // slice_width
     
@@ -213,7 +223,7 @@ for i in range(N_img):
 #%% Catches any arrays that are not correct size
 omit_array = []
 for i in range(len(Imagelist)):
-    if Imagelist[i].shape != (64, 128):
+    if Imagelist[i].shape != (64, 64):
         omit_array.append(i)
 
 Imagelist = [element for i, element in enumerate(Imagelist) if i not in omit_array]
