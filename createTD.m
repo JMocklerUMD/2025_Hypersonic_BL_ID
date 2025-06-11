@@ -1,4 +1,4 @@
-folder_path = "C:\Users\tyler\Desktop\NSSSIP25\run33";
+folder_path = "C:\Users";
 
 % read in files in folder
 images = dir(fullfile(folder_path, '*.tif'));
