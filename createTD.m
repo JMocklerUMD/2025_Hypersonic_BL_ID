@@ -1,4 +1,4 @@
-folder_path = 'C:\Users\tyler\Desktop\NSSSIP25\run33';
+folder_path = 'C:\Users\cathe\Documents\MATLAB\trainML\T9Run4120';
 
 % read in files in folder
 images = dir(fullfile(folder_path, '*.tif'));
@@ -24,12 +24,13 @@ for i = 1:length(images)
     img = double(image_list{i});
     img = mean_img - img;
     processed{i} = rescale(img, 0, 1);
-    %processed{i} = imadjust(imgaussfilt(img, 1));
 end
+
 %%
 save_file = fullfile(folder_path, 'partial_results.mat');
 
 if isfile(save_file)
+
     load(save_file, 'results', 'start_frame');
     disp(['Resuming from frame ' num2str(start_frame)])
 else
@@ -43,9 +44,16 @@ while i <= length(images)
     imshow(processed{i});
     title(['Frame ' num2str(i)]);
     
-    wp = input('Wave packet? (0 = no, 1 = yes, 2 = relabel previous, 3 = exit): ');
+    wp = input('Wave packet? (0 = no, 1 = yes, 2 = relabel previous, 3 = throw away, 4 = exit): ');
     
     if wp == 3
+        results{i,2} = wp;
+        i = i+1;
+        close;
+        continue;
+    end
+
+    if wp == 4
         disp('Exiting and saving progress...');
         save(save_file, 'results', 'start_frame')
         close;
@@ -81,8 +89,7 @@ while i <= length(images)
     results{i,8} = cols;
     close;
 
-    start_frame = i +1;
-    save(save_file, 'results', 'start_frame');
+    start_frame = i + 1;
 
     i = i +1;
 end
@@ -90,32 +97,37 @@ end
 output_file = fullfile(folder_path, 'wavepacket_labels.txt');
 fileID = fopen(output_file, 'w');
 
+if i == length(images)
+    for i = 1:length(images)
+         if results{i,2} == 3
+            continue;
+         end
 
-for i = 1:length(images)
-    fprintf(fileID, '%d\t', results{i,1});
-    fprintf(fileID, '%d\t', results{i,2});
-    
-    for j = 3:6
-        item = results{i,j};
-        if ischar(item) || isstring(item)
-            fprintf(fileID, '%s\t', item);
-        else
-            fprintf(fileID, '%.0f\t', item);
+        fprintf(fileID, '%d\t', results{i,1});
+        fprintf(fileID, '%d\t', results{i,2});
+        
+        for j = 3:6
+            item = results{i,j};
+            if ischar(item) || isstring(item)
+                fprintf(fileID, '%s\t', item);
+            else
+                fprintf(fileID, '%.0f\t', item);
+            end
         end
-    end
+        
+        fprintf(fileID, '%d\t%d\t', results{i,7}, results{i,8});
     
-    fprintf(fileID, '%d\t%d\t', results{i,7}, results{i,8});
-
-    img = processed{i};
-    img_flat = reshape(img', 1, []);
-    for k = 1:length(img_flat)
-        pixel = img_flat(k);
-        fprintf(fileID, '%.6f\t', pixel);
+        img = processed{i};
+        img_flat = reshape(img', 1, []);
+        for k = 1:length(img_flat)
+            pixel = img_flat(k);
+            fprintf(fileID, '%.6f\t', pixel);
+        end
+        fprintf(fileID, '\n');
     end
-    fprintf(fileID, '\n');
-end
-fclose(fileID);
-
-if start_frame > length(images) && isfile(save_file)
-    delete(save_file);
+    fclose(fileID);
+    
+    if start_frame > length(images) && isfile(save_file)
+        delete(save_file);
+    end
 end
