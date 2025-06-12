@@ -10,20 +10,26 @@ for i = 1:length(images)
     image_list{i} = imread(path);
 end
 
-% create mean reference image
-mean_img = double(image_list{1});
-for i = 2:length(image_list)
-    img = double(image_list{i});
-    mean_img = mean_img + img;
-end
-mean_img = mean_img / length(image_list);
-
-% subtract mean image from others
 processed = cell(1, length(images));
-for i = 1:length(images)
-    img = double(image_list{i});
-    img = mean_img - img;
-    processed{i} = rescale(img, 0, 1);
+
+for k = 1:100:length(images)
+    batch_end = min(k+99, length(images));
+    % create mean reference image
+    mean_img = double(image_list{k});
+    tot = 1;
+    for i = (k+1):batch_end
+        img = double(image_list{i});
+        mean_img = mean_img + img;
+        tot = tot+1;
+    end
+    mean_img = mean_img./ tot;
+    
+    % subtract mean image from others
+    for i = k:batch_end
+        img = double(image_list{i});
+        img = mean_img - img;
+        processed{i} = rescale(img, 0, 1);
+    end
 end
 
 %%
@@ -42,6 +48,7 @@ i = start_frame;
 while i <= length(images)
     figure;
     imshow(processed{i});
+    set(gcf, 'WindowState', 'maximized')
     title(['Frame ' num2str(i)]);
     
     wp = input('Wave packet? (0 = no, 1 = yes, 2 = relabel previous, 3 = throw away, 4 = exit): ');
@@ -96,8 +103,9 @@ end
 
 output_file = fullfile(folder_path, 'wavepacket_labels.txt');
 fileID = fopen(output_file, 'w');
+%%
 
-if i == length(images)
+if i == length(images) + 1
     for i = 1:length(images)
          if results{i,2} == 3
             continue;
