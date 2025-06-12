@@ -95,7 +95,7 @@ that can be passed to the keras NN trainer
 print('Reading training data file')
 
 # Write File Name
-file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\training_data_explicit.txt'
+file_name = 'C:\\Users\\rclat\\OneDrive\\Documents\\run34\\wavepacket_labels.txt'
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()
@@ -112,7 +112,7 @@ print('Begin writing training data to numpy array')
 WP_io = []
 #SM_bounds_Array = []
 Imagelist = []
-N_img, N_tot = 150, 1000
+N_img, N_tot = 150, 577
 i_sample, img_count = 0, 0
 sampled_list = []
 
@@ -160,7 +160,7 @@ while (img_count < N_img) and (i_sample < N_tot):
         x_max = x_min + box_width
         y_max = y_min + box_height
     
-    for i in range(num_slices):
+    for i in range(num_slices-1):
         x_start = i * slice_width
         x_end = (i + 1) * slice_width
     
@@ -174,7 +174,7 @@ while (img_count < N_img) and (i_sample < N_tot):
 
         else:
             # Check for horizontal overlap with this slice
-            if x_max >= x_start and x_min <= x_end:
+            if x_max >= x_start+slice_width/4 and x_min <= x_end-slice_width/4:
                 WP_io.append(1)
 
             else:
@@ -249,7 +249,7 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
                     activation = 'relu',                        # Activation function at each node
                     input_dim = input_shape,                    # Input controlled by feature vect from ResNet50
                     kernel_regularizer=regularizers.L1L2(l1=0.01, l2=0.01),     # Regularization penality term
-                    bias_regularizer=regularizers.L2(0.01)))                    # Additional regularization penalty term
+                    bias_regularizer=regularizers.L2(1e-4)))                    # Additional regularization penalty term
     
     model.add(Dropout(0.5))     # Add dropout to make the system more robust
     model.add(Dense(1, activation = 'sigmoid'))     # Add final classification layer
@@ -429,5 +429,5 @@ print(f"True Pos: {n11}, True Neg: {n00}, False Pos: {n01}, False Neg: {n10}")
 
 
 #%% Save off the model, if desired
-model.save('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\trained_classifier_RandomSampled.keras')
+model.save('C:\\Users\\rclat\\OneDrive\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\trained_classifier_RandomSampled.keras')
 

@@ -44,14 +44,14 @@ output = tf.keras.layers.Flatten()(output)
 resnet_model = Model(model1.input,output)
 
 # load the classifier
-model = keras.models.load_model('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\trained_classifier_RandomSampled.keras')
+model = keras.models.load_model('C:\\Users\\rclat\\OneDrive\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\trained_classifier_RandomSampled.keras')
 
 
 #%% read in images
 print('Reading training data file')
 
 # Write File Name
-file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\training_data_explicit.txt'
+file_name = 'C:\\Users\\rclat\\OneDrive\\Documents\\run34\\wavepacket_labels.txt'
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()
@@ -102,7 +102,7 @@ def image_splitting(i, lines):
         x_max = x_min + box_width
         y_max = y_min + box_height
     
-    for i in range(num_slices):
+    for i in range(num_slices-1):
         x_start = i * slice_width
         x_end = (i + 1) * slice_width
     
@@ -116,7 +116,7 @@ def image_splitting(i, lines):
     
         else:
             # Check for horizontal overlap with this slice
-            if x_max >= x_start and x_min <= x_end:
+            if x_max >= x_start+slice_width/4 and x_min <= x_end-slice_width/4:
                 WP_io.append(1)
     
             else:
@@ -138,7 +138,7 @@ def classify_the_images(model, Imagelist):
 
 
 #%% Iterate through the list!
-N_img = 1000
+N_img = 577
 acc_history = []
 TP_history = []
 TN_history = []
