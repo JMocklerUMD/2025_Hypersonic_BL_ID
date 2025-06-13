@@ -43,6 +43,8 @@ from sklearn.utils import class_weight
 #import cv2
 
 
+#from tensorflow.keras.callbacks import EarlyStopping
+
 #%% Function calls
 '''
 Function calls used throughout the script.
@@ -96,7 +98,7 @@ that can be passed to the keras NN trainer
 print('Reading training data file')
 
 # Write File Name
-file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\ConeFlare_Shot67_re45_0deg\\training_data.txt'
+file_name = 'C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\Test1\\run33\\wavepacket_labels.txt'
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()
@@ -113,7 +115,7 @@ print('Begin writing training data to numpy array')
 WP_io = []
 #SM_bounds_Array = []
 Imagelist = []
-N_img, N_tot = 250, lines_len
+N_img, N_tot = 75, lines_len
 i_sample, img_count = 0, 0
 sampled_list = []
 
@@ -161,7 +163,7 @@ while (img_count < N_img) and (i_sample < N_tot):
         x_max = x_min + box_width
         y_max = y_min + box_height
     
-    for i in range(num_slices-1):
+    for i in range(num_slices):
         x_start = i * slice_width
         x_end = (i + 1) * slice_width
     
@@ -208,9 +210,26 @@ WP_io = np.array(WP_io)
 Imagelist_resized = np.array([img_preprocess(img) for img in Imagelist])
 print("Done Resizing")
 
+#%% Create dataset - see https://www.youtube.com/watch?v=OqWbsbLhKws&list=WL
+
+dataset = tf.data.Dataset.from_tensor_slices((Imagelist_resized, WP_io)) #can maybe combine data augmentation and preprocessing for (potentially) more efficiently and likely more simplicity
+#print(list(dataset.as_numpy_iterator())) #for troubleshooting/understanding
+
+#dataset = dataset.shuffle(5) #ignore first # from bummer, then take the next available; higher buffer # is more random; ideal buffer is equal to the size of the dataset, but that can be unrealistically large
+#1024 choosen due to its use as an example in the above YT video - small enough to be reasonable, large enough to be somewhat random; if len(dataset)<1024, it shuffles as if buffer==len(dataset)
+batched_dataset = dataset.shuffle(1024).batch(16) 
+
+train_size = int(0.8 * len(batched_dataset))
+train_dataset = batched_dataset.take(train_size)
+test_dataset = batched_dataset.skip(train_size)
+
+
+
+
 #%% Split the test and train images
-trainimgs, testimgs, trainlbs, testlbls = train_test_split(Imagelist_resized,WP_io, test_size=0.2, random_state=69)
-print("Done Splitting")
+
+#trainimgs, testimgs, trainlbs, testlbls = train_test_split(Imagelist_resized,WP_io, test_size=0.2, random_state=69)
+#print("Done Splitting")
 
 #%% Train the feature extractor model only
 
@@ -237,8 +256,8 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     Defining and training our classification NN: after passing through resnet50,
     images are then passed through this network and classified. 
     '''    
-    trainimgs_res = get_bottleneck_features(resnet_model, trainimgs)
-    testimgs_res = get_bottleneck_features(resnet_model, testimgs)
+    trainimgs_res = get_bottleneck_features(resnet_model, train_dataset.Imagelist_resized)
+    testimgs_res = get_bottleneck_features(resnet_model, test_dataset.Imagelist_resized)
     
     # Generate an input shape for our classification layers
     input_shape = resnet_model.output_shape[1]
@@ -246,8 +265,8 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     # Get unique classes and compute weights
     class_weights = class_weight.compute_class_weight(
         class_weight='balanced',
-        classes=np.unique(trainlbs),
-        y=trainlbs
+        classes=np.unique(train_dataset.WP_io),
+        y=train_dataset.WP_io
         )
     
     # Convert to dictionary format required by Keras
@@ -274,16 +293,28 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     # Inspect the resulting model
     model.summary()
     
+    '''
+    #early stopping code from Google search AI
+    early_stopping = EarlyStopping(
+        monitor='val_accuracy',  # Metric to monitor (e.g., validation loss)
+        patience=5,        # Number of epochs with no improvement to wait
+        min_delta=0.001,    # Minimum change to be considered an improvement
+        restore_best_weights=True # Whether to restore the model weights to the best epoch
+    )
+    '''
+    
     # Train the model! Takes about 20 sec/epoch
     ne = 20
     batch_size = 16
-    history = model.fit(trainimgs_res, trainlbs, 
+    history = model.fit(train_dataset, 
                         validation_split = 0.25, 
                         epochs = ne, 
                         verbose = 1,
                         batch_size = batch_size,
                         shuffle=True,
-                        class_weight = class_weights_dict)
+                        class_weight = class_weights_dict
+                        #,callbacks=[early_stopping]
+                        )
     
     # Return the results!
     # On this model, we need to return the processed test images for validation 
@@ -291,6 +322,8 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     return history, model, testimgs_res, ne
 
 #%% Train the fine tuning model
+
+'''
 
 def feature_extractor_fine_tuning(trainimgs, trainlbs, testimgs):
     
@@ -335,6 +368,7 @@ def feature_extractor_fine_tuning(trainimgs, trainlbs, testimgs):
     # running them thru the bottleneck first
     return history, model_FineTune, testimgs, ne
 
+'''
 
 #%% Call fcn to train the model!
 history, model, testimgs_res, ne = feature_extractor_training(trainimgs, trainlbs, testimgs)
@@ -440,5 +474,5 @@ print(f"True Pos: {n11}, True Neg: {n00}, False Pos: {n01}, False Neg: {n10}")
 
 
 #%% Save off the model, if desired
-model.save('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\ConeFlareRe45.keras')
+model.save('C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\Test1\\run33\\run33_relabeled.keras')
 
