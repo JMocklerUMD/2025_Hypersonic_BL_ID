@@ -7,7 +7,6 @@ import os
 import keras
 import tensorflow as tf
 
-
 from keras.applications import resnet50
 from keras.models import Model
 
@@ -15,7 +14,6 @@ from keras.preprocessing import image
 from keras.preprocessing.image import load_img
 from keras.preprocessing.image import img_to_array
 from keras.preprocessing.image import array_to_img
-
 
 
 #%% Function Calls + Resnet50 instantiation
@@ -44,14 +42,14 @@ output = tf.keras.layers.Flatten()(output)
 resnet_model = Model(model1.input,output)
 
 # load the classifier
-model = keras.models.load_model('C:\\Users\\rclat\\OneDrive\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\trained_classifier_RandomSampled.keras')
+model = keras.models.load_model('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\ConeFlareRe45.keras')
 
 
 #%% read in images
 print('Reading training data file')
 
 # Write File Name
-file_name = 'C:\\Users\\rclat\\OneDrive\\Documents\\run34\\wavepacket_labels.txt'
+file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\ConeFlare_Shot67_re45_0deg\\wavepacket_labels.txt'
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()
@@ -87,8 +85,8 @@ def image_splitting(i, lines):
     full_image = np.array(image_data).astype(np.float64)
     full_image = full_image.reshape(image_size)  # Reshape to (rows, columns)
     
-    if full_image.shape != (64, 1280):
-        print(f"Skipping image at line {i+1} — unexpected size {full_image.shape}")
+    #if full_image.shape != (64, 1280):
+    #    print(f"Skipping image at line {i+1} — unexpected size {full_image.shape}")
         #continue
     
     slice_width = 64
@@ -134,11 +132,11 @@ def classify_the_images(model, Imagelist):
     test_res= model.predict(Imagelist_res)
     classification_result = np.round(test_res)
     
-    return classification_result
+    return classification_result, test_res
 
 
 #%% Iterate through the list!
-N_img = 577
+N_img = lines_len
 acc_history = []
 TP_history = []
 TN_history = []
@@ -150,7 +148,7 @@ for i_iter in range(N_img):
     
     Imagelist, WP_io, slice_width, height, sm_bounds = image_splitting(i_iter, lines)
     
-    classification_result = classify_the_images(model, Imagelist)
+    classification_result, confidence = classify_the_images(model, Imagelist)
   
     # Restack and plot the image
     imageReconstruct = np.hstack([image for image in Imagelist])
@@ -182,7 +180,15 @@ for i_iter in range(N_img):
             rect = Rectangle((i*slice_width, 5), slice_width, height-10,
                                      linewidth=0.5, edgecolor='red', facecolor='none')
             ax.add_patch(rect)
-    
+            
+        # Adds a rectangle for the confidence of classification at every square
+        prob = confidence[i,0]
+        rect = Rectangle((i*slice_width, 5), slice_width, height-10,
+        linewidth=1.0*prob*prob, edgecolor='red', facecolor='none')
+        ax.add_patch(rect)
+        ax.text(i*slice_width, height+40,round(prob,2), fontsize = 7)
+            
+            
     # Compute the inter-image accuracy
     acc = (n00 + n11) / (n00 + n11 + n10 + n01)
     print(f'Image {i_iter}: accuracy = {acc}')
@@ -215,36 +221,39 @@ def moving_average(a, n):
     ret[n:] = ret[n:] - ret[:-n]
     return ret[n - 1:] / n
 
-n = 20
+Nframe_per_img = len(Imagelist)
+n = 20 # Moving avg window
+    
 fig, (pl1, pl2, pl3, pl4, pl5) = plt.subplots(5,1, figsize = (16,16))
 pl1.plot(range(len(acc_history)), acc_history)
 pl1.plot(range(n-1, len(acc_history)), moving_average(acc_history, n), color='k', linewidth = 2)
 pl1.set_title('Accuracy')
 
-pl2.plot(range(len(TP_history)), TP_history)
-pl2.plot(range(n-1, len(acc_history)), moving_average(TP_history, n), color='k', linewidth = 2)
+pl2.plot(range(len(TP_history)), [img_stat/Nframe_per_img for img_stat in TP_history])
+pl2.plot(range(n-1, len(acc_history)), moving_average(TP_history, n)/Nframe_per_img, color='k', linewidth = 2)
 pl2.set_title('True positive rate')
 
-pl3.plot(range(len(TN_history)), TN_history)
-pl3.plot(range(n-1, len(TN_history)), moving_average(TN_history, n), color='k', linewidth = 2)
+pl3.plot(range(len(TN_history)), [img_stat/Nframe_per_img for img_stat in TN_history])
+pl3.plot(range(n-1, len(TN_history)), moving_average(TN_history, n)/Nframe_per_img, color='k', linewidth = 2)
 pl3.set_title('True negative rate')
 
-pl4.plot(range(len(FP_history)), FP_history)
-pl4.plot(range(n-1, len(FP_history)), moving_average(FP_history, n), color='k', linewidth = 2)
+pl4.plot(range(len(FP_history)), [img_stat/Nframe_per_img for img_stat in FP_history])
+pl4.plot(range(n-1, len(FP_history)), moving_average(FP_history, n)/Nframe_per_img, color='k', linewidth = 2)
 pl4.set_title('False positive rate')
 
-pl5.plot(range(len(FN_history)), FN_history)
-pl5.plot(range(n-1, len(FN_history)), moving_average(FN_history, n), color='k', linewidth = 2)
+pl5.plot(range(len(FN_history)), [img_stat/Nframe_per_img for img_stat in FN_history])
+pl5.plot(range(n-1, len(FN_history)), moving_average(FN_history, n)/Nframe_per_img, color='k', linewidth = 2)
 pl5.set_title('False negative rate')
 
 
 #%% Compute MICE
+Nframe_per_img = len(Imagelist)
 MICE = []
 for i in range(len(acc_history)):
     n0 = TP_history[i] + FP_history[i]
     n1 = TN_history[i] + FN_history[i]
     
-    A0 = (n0/20)**2 + (n1/20)**2
+    A0 = (n0/Nframe_per_img)**2 + (n1/Nframe_per_img)**2
     if np.isclose(1-A0, 0):
         MICE.append(0.0)
     else:
@@ -262,10 +271,10 @@ ax.set_title('MICE Performance')
 print("Data set statistics")
 print("----------------------------------------")
 print(f"Whole-set Average: {np.mean(acc_history)}")
-print(f"Whole-set True Positive rate: {np.mean(TP_history)/20}")
-print(f"Whole-set True Negative rate: {np.mean(TN_history)/20}")
-print(f"Whole-set False Positive rate: {np.mean(FP_history)/20}")
-print(f"Whole-set False Negative rate: {np.mean(FN_history)/20}")
+print(f"Whole-set True Positive rate: {np.mean(TP_history)/Nframe_per_img}")
+print(f"Whole-set True Negative rate: {np.mean(TN_history)/Nframe_per_img}")
+print(f"Whole-set False Positive rate: {np.mean(FP_history)/Nframe_per_img}")
+print(f"Whole-set False Negative rate: {np.mean(FN_history)/Nframe_per_img}")
 print(f"Whole-set MICE Score: {np.mean(MICE)}")
 
 

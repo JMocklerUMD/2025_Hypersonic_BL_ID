@@ -39,6 +39,7 @@ import numpy as np
 
 from sklearn.model_selection import train_test_split
 from sklearn.svm import SVC
+from sklearn.utils import class_weight
 #import cv2
 
 
@@ -95,7 +96,7 @@ that can be passed to the keras NN trainer
 print('Reading training data file')
 
 # Write File Name
-file_name = 'C:\\Users\\rclat\\OneDrive\\Documents\\run34\\wavepacket_labels.txt'
+file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\ConeFlare_Shot67_re45_0deg\\wavepacket_labels.txt'
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()
@@ -112,7 +113,7 @@ print('Begin writing training data to numpy array')
 WP_io = []
 #SM_bounds_Array = []
 Imagelist = []
-N_img, N_tot = 150, 577
+N_img, N_tot = 250, lines_len
 i_sample, img_count = 0, 0
 sampled_list = []
 
@@ -145,9 +146,9 @@ while (img_count < N_img) and (i_sample < N_tot):
     full_image = np.array(image_data).astype(np.float64)
     full_image = full_image.reshape(image_size)  # Reshape to (rows, columns)
     
-    if full_image.shape != (64, 1280):
-        print(f"Skipping image at line {i_sample+1} — unexpected size {full_image.shape}")
-        continue
+    #if full_image.shape != (64, 1280):
+    #    print(f"Skipping image at line {i_sample+1} — unexpected size {full_image.shape}")
+    #    continue
     
     slice_width = 64
     height, width = full_image.shape
@@ -190,13 +191,13 @@ while (img_count < N_img) and (i_sample < N_tot):
 print('Done sampling images!')
 
 #%% Catches any arrays that are not correct size
-omit_array = []
-for i in range(len(Imagelist)):
-    if Imagelist[i].shape != (64, 64):
-        omit_array.append(i)
+#omit_array = []
+#for i in range(len(Imagelist)):
+#    if Imagelist[i].shape != (64, 64):
+#        omit_array.append(i)
 
-Imagelist = [element for i, element in enumerate(Imagelist) if i not in omit_array]
-WP_io = [element for i, element in enumerate(WP_io) if i not in omit_array]
+#Imagelist = [element for i, element in enumerate(Imagelist) if i not in omit_array]
+#WP_io = [element for i, element in enumerate(WP_io) if i not in omit_array]
 
 
 #%% Resizes the arrays
@@ -242,13 +243,24 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     # Generate an input shape for our classification layers
     input_shape = resnet_model.output_shape[1]
     
+    # Get unique classes and compute weights
+    class_weights = class_weight.compute_class_weight(
+        class_weight='balanced',
+        classes=np.unique(trainlbs),
+        y=trainlbs
+        )
+    
+    # Convert to dictionary format required by Keras
+    class_weights_dict = dict(enumerate(class_weights))
+    print("Class weights:", class_weights_dict)
+    
     # Added the classification layers
     model = Sequential()
     model.add(InputLayer(input_shape = (input_shape,)))
     model.add(Dense(256,                                        # NN dimension            
                     activation = 'relu',                        # Activation function at each node
                     input_dim = input_shape,                    # Input controlled by feature vect from ResNet50
-                    kernel_regularizer=regularizers.L1L2(l1=0.01, l2=0.01),     # Regularization penality term
+                    kernel_regularizer=regularizers.L1L2(l1=1e-4, l2=1e-4),     # Regularization penality term
                     bias_regularizer=regularizers.L2(1e-4)))                    # Additional regularization penalty term
     
     model.add(Dropout(0.5))     # Add dropout to make the system more robust
@@ -270,7 +282,8 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
                         epochs = ne, 
                         verbose = 1,
                         batch_size = batch_size,
-                        shuffle=True)
+                        shuffle=True,
+                        class_weight = class_weights_dict)
     
     # Return the results!
     # On this model, we need to return the processed test images for validation 
@@ -426,8 +439,6 @@ print("")
 print(f"True Pos: {n11}, True Neg: {n00}, False Pos: {n01}, False Neg: {n10}")
 
 
-
-
 #%% Save off the model, if desired
-model.save('C:\\Users\\rclat\\OneDrive\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\trained_classifier_RandomSampled.keras')
+model.save('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\ConeFlareRe45.keras')
 
