@@ -1,3 +1,7 @@
+%% Create Training Data
+
+%% Read in and Process Images
+
 folder_path = 'C:\Users\cathe\Documents\MATLAB\trainML\T9Run4120';
 
 % read in files in folder
@@ -32,8 +36,11 @@ for k = 1:100:length(images)
     end
 end
 
-%%
+%% Manually train data 
+
 save_file = fullfile(folder_path, 'partial_results.mat');
+
+run = 4120; %change to run number
 
 if isfile(save_file)
 
@@ -46,37 +53,40 @@ end
 
 i = start_frame;
 while i <= length(images)
-    figure;
-    imshow(processed{i});
+    
+    % display image
+    img = processed{i};
+    img_enhanced = imadjust(img);
+    imshow(img_enhanced)
     set(gcf, 'WindowState', 'maximized')
-    title(['Frame ' num2str(i)]);
+    set(gcf, 'Color', 'k');  
+    t = title(['Frame ' num2str(i)]);
+    t.Color = 'white';
     
     wp = input('Wave packet? (0 = no, 1 = yes, 2 = relabel previous, 3 = throw away, 4 = exit): ');
     
+    % throwaway
     if wp == 3
         results{i,2} = wp;
         i = i+1;
         close;
         continue;
-    end
-
-    if wp == 4
+    
+    % exit and save
+    elseif wp == 4
         disp('Exiting and saving progress...');
         save(save_file, 'results', 'start_frame')
         close;
         break;
-    end
 
-    if wp == 2
+    % go back
+    elseif wp == 2
        i = i-1;
        close;
        continue;
-    end
 
-    results{i,1} = i;
-    results{i,2} = wp;
-
-    if wp == 1
+    % there is a wavepacket! draw a bounding box
+    elseif wp == 1
         disp('Draw bounding box around the wave packet.');
         bb = drawrectangle(); 
         bbox = bb.Position; % [x y width height]
@@ -84,38 +94,54 @@ while i <= length(images)
         results{i,4} = bbox(2);
         results{i,5} = bbox(3); 
         results{i,6} = bbox(4);
-    else
+
+    % there is no wavepacket
+    elseif wp == 0
         results{i,3} = 'X';
         results{i,4} = 'X';
         results{i,5} = 'X'; 
         results{i,6} = 'X';
+
+    % fail safe for invalid inputs
+    else
+        disp("Invalid input. Try again.")
+        continue;
     end
+
+    % store results
+    results{i,1} = run;
+    results{i,2} = wp;
     img = processed{i};
     [rows, cols] = size(img);
     results{i, 7} = rows;
     results{i,8} = cols;
     close;
-
     start_frame = i + 1;
-
-    i = i +1;
+    i = i + 1;
 end
 
-output_file = fullfile(folder_path, 'wavepacket_labels.txt');
+%% Write trained data to .txt file
+
+output_file = fullfile(folder_path, 'training_data.txt');
 fileID = fopen(output_file, 'w');
-%%
 
-if i == length(images) + 1
-    for i = 1:length(images)
-         if results{i,2} == 3
-            continue;
-         end
+% only perform if all images are labeled
+if i == length(images) + 1 % remove if statement if training stopped early and run section
+    for k = 1:length(images)
 
-        fprintf(fileID, '%d\t', results{i,1});
-        fprintf(fileID, '%d\t', results{i,2});
+        % do not record throwaway images
+        if results{k,2} == 3
+           continue;
+        end
         
+        % write run
+        fprintf(fileID, '%d\t', results{k,1});
+        % write WP ID
+        fprintf(fileID, '%d\t', results{k,2});
+        
+        % write bounding box coords
         for j = 3:6
-            item = results{i,j};
+            item = results{k,j};
             if ischar(item) || isstring(item)
                 fprintf(fileID, '%s\t', item);
             else
@@ -123,19 +149,22 @@ if i == length(images) + 1
             end
         end
         
-        fprintf(fileID, '%d\t%d\t', results{i,7}, results{i,8});
-    
-        img = processed{i};
+        % write image size [height, width]
+        fprintf(fileID, '%d\t%d\t', results{k,7}, results{k,8});
+        
+        %write image data
+        img = processed{k};
         img_flat = reshape(img', 1, []);
-        for k = 1:length(img_flat)
-            pixel = img_flat(k);
+        for m = 1:length(img_flat)
+            pixel = img_flat(m);
             fprintf(fileID, '%.6f\t', pixel);
         end
         fprintf(fileID, '\n');
     end
     fclose(fileID);
     
-    if start_frame > length(images) && isfile(save_file)
+    % delete saved file when all data is written
+    if k == length(images) && isfile(save_file)
         delete(save_file);
     end
 end
