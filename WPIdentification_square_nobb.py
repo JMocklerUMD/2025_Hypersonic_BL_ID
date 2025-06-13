@@ -10,9 +10,11 @@ import os
 import math
 import random
 
+import keras
+
 import tensorflow as tf
 
-from keras import optimizers
+from keras import optimizers, layers, regularizers
 
 from keras.applications import resnet50, vgg16
 
@@ -36,6 +38,8 @@ import h5py
 import numpy as np
 
 from sklearn.model_selection import train_test_split
+from sklearn.svm import SVC
+from sklearn.utils import class_weight
 #import cv2
 
 
@@ -92,7 +96,7 @@ that can be passed to the keras NN trainer
 print('Reading training data file')
 
 # Write File Name
-file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\training_data_explicit.txt'
+file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\ConeFlare_Shot67_re45_0deg\\training_data.txt'
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()
@@ -109,10 +113,21 @@ print('Begin writing training data to numpy array')
 WP_io = []
 #SM_bounds_Array = []
 Imagelist = []
-N_img = 125
+N_img, N_tot = 250, lines_len
+i_sample, img_count = 0, 0
+sampled_list = []
 
-for i in range(N_img):
-    curr_line = i;
+# Break when we aquire 100 images or when we run thru the 1000 frames
+while (img_count < N_img) and (i_sample < N_tot):
+    
+    # Randomly sample image with probability N_img/N_tot
+    # Skip image if in the 1-N_img/N_tot probability
+    if np.random.random_sample(1)[0] < (1-N_img/N_tot):
+        i_sample = i_sample + 1
+        continue
+    
+    # Otherwise, we accept the image and continue with the processing
+    curr_line = i_sample;
     line = lines[curr_line]
 
     parts = line.strip().split()
@@ -131,9 +146,9 @@ for i in range(N_img):
     full_image = np.array(image_data).astype(np.float64)
     full_image = full_image.reshape(image_size)  # Reshape to (rows, columns)
     
-    if full_image.shape != (64, 1280):
-        print(f"Skipping image at line {i+1} — unexpected size {full_image.shape}")
-        continue
+    #if full_image.shape != (64, 1280):
+    #    print(f"Skipping image at line {i_sample+1} — unexpected size {full_image.shape}")
+    #    continue
     
     slice_width = 64
     height, width = full_image.shape
@@ -146,7 +161,7 @@ for i in range(N_img):
         x_max = x_min + box_width
         y_max = y_min + box_height
     
-    for i in range(num_slices):
+    for i in range(num_slices-1):
         x_start = i * slice_width
         x_end = (i + 1) * slice_width
     
@@ -160,25 +175,29 @@ for i in range(N_img):
 
         else:
             # Check for horizontal overlap with this slice
-            if x_max >= x_start and x_min <= x_end:
+            if x_max >= x_start+slice_width/4 and x_min <= x_end-slice_width/4:
                 WP_io.append(1)
 
             else:
                 WP_io.append(0)
-                
-    # Track progress
-    if (i % 10) == 0:
-        print(f"{i/N_img} percent complete")
+    
+    # Increment to the next sample image and image count
+    i_sample = i_sample + 1
+    img_count = img_count + 1
+    
+    # Inspect what images were selected later
+    sampled_list.append(i_sample)
 
+print('Done sampling images!')
 
 #%% Catches any arrays that are not correct size
-omit_array = []
-for i in range(len(Imagelist)):
-    if Imagelist[i].shape != (64, 64):
-        omit_array.append(i)
+#omit_array = []
+#for i in range(len(Imagelist)):
+#    if Imagelist[i].shape != (64, 64):
+#        omit_array.append(i)
 
-Imagelist = [element for i, element in enumerate(Imagelist) if i not in omit_array]
-WP_io = [element for i, element in enumerate(WP_io) if i not in omit_array]
+#Imagelist = [element for i, element in enumerate(Imagelist) if i not in omit_array]
+#WP_io = [element for i, element in enumerate(WP_io) if i not in omit_array]
 
 
 #%% Resizes the arrays
@@ -187,78 +206,142 @@ WP_io = [element for i, element in enumerate(WP_io) if i not in omit_array]
 Imagelist = np.array(Imagelist)
 WP_io = np.array(WP_io)
 Imagelist_resized = np.array([img_preprocess(img) for img in Imagelist])
+print("Done Resizing")
 
-#%%
-"""
-Building the Resnet50 model: images are first passed through the Reset50 model
-prior to passing through one last NN layer that we will define. Initialize
-this code block once!
-"""
-
-# Bringing in ResNet50 to use as our feature extractor
-model1 = resnet50.ResNet50(include_top = False, weights ='imagenet', input_shape = (224,224,3))
-output = model1.output
-output = tf.keras.layers.Flatten()(output)
-resnet_model = Model(model1.input,output)
-
-# Locking in the weights of the feature detection layers
-resnet_model.trainable = False
-for layer in resnet_model.layers:
-	layer.trainable = False
-    
-# Split the images - do this once to avoid memory allocation issues!
-# Running the functions to bring in our images and labels
-trainimgs = Imagelist_resized
-trainlbls = WP_io
-
+#%% Split the test and train images
 trainimgs, testimgs, trainlbs, testlbls = train_test_split(Imagelist_resized,WP_io, test_size=0.2, random_state=69)
+print("Done Splitting")
 
-trainimgs_res = get_bottleneck_features(resnet_model, trainimgs)
-testimgs_res = get_bottleneck_features(resnet_model, testimgs)
+#%% Train the feature extractor model only
 
-#%%
-'''
-Defining and training our classification NN: after passing through resnet50,
-images are then passed through this network and classified. 
-'''
+def feature_extractor_training(trainimgs, trainlbs, testimgs):
+    """
+    Building the Resnet50 model: images are first passed through the Reset50 model
+    prior to passing through one last NN layer that we will define. Initialize
+    this code block once!
+    """
 
-# If we leave this code block seperate from the others, we can directly
-# change our architecture and view the results
+    # Bringing in ResNet50 to use as our feature extractor
+    model1 = resnet50.ResNet50(include_top = False, weights ='imagenet', input_shape = (224,224,3))
+    output = model1.output
+    output = tf.keras.layers.Flatten()(output)
+    resnet_model = Model(model1.input,output)
 
-# Generate an input shape for our classification layers
-input_shape = resnet_model.output_shape[1]
+    # Locking in the weights of the feature detection layers
+    resnet_model.trainable = False
+    for layer in resnet_model.layers:
+    	layer.trainable = False
+    
+    
+    '''
+    Defining and training our classification NN: after passing through resnet50,
+    images are then passed through this network and classified. 
+    '''    
+    trainimgs_res = get_bottleneck_features(resnet_model, trainimgs)
+    testimgs_res = get_bottleneck_features(resnet_model, testimgs)
+    
+    # Generate an input shape for our classification layers
+    input_shape = resnet_model.output_shape[1]
+    
+    # Get unique classes and compute weights
+    class_weights = class_weight.compute_class_weight(
+        class_weight='balanced',
+        classes=np.unique(trainlbs),
+        y=trainlbs
+        )
+    
+    # Convert to dictionary format required by Keras
+    class_weights_dict = dict(enumerate(class_weights))
+    print("Class weights:", class_weights_dict)
+    
+    # Added the classification layers
+    model = Sequential()
+    model.add(InputLayer(input_shape = (input_shape,)))
+    model.add(Dense(256,                                        # NN dimension            
+                    activation = 'relu',                        # Activation function at each node
+                    input_dim = input_shape,                    # Input controlled by feature vect from ResNet50
+                    kernel_regularizer=regularizers.L1L2(l1=1e-4, l2=1e-4),     # Regularization penality term
+                    bias_regularizer=regularizers.L2(1e-4)))                    # Additional regularization penalty term
+    
+    model.add(Dropout(0.5))     # Add dropout to make the system more robust
+    model.add(Dense(1, activation = 'sigmoid'))     # Add final classification layer
+    
+    # Compile the NN
+    model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-6), 
+                  loss = 'binary_crossentropy', 
+                  metrics = ['accuracy'])
+    
+    # Inspect the resulting model
+    model.summary()
+    
+    # Train the model! Takes about 20 sec/epoch
+    ne = 20
+    batch_size = 16
+    history = model.fit(trainimgs_res, trainlbs, 
+                        validation_split = 0.25, 
+                        epochs = ne, 
+                        verbose = 1,
+                        batch_size = batch_size,
+                        shuffle=True,
+                        class_weight = class_weights_dict)
+    
+    # Return the results!
+    # On this model, we need to return the processed test images for validation 
+    # in the later step
+    return history, model, testimgs_res, ne
 
-# Now we'll add new classification layers
-model = Sequential()
-model.add(InputLayer(input_shape = (input_shape,)))
-model.add(Dense(256, activation = 'relu', input_dim = input_shape))
-model.add(Dropout(0.5))
-#model.add(Dense(128, activation = 'relu'))
-#model.add(Dropout(0.3))
-#model.add(Dense(64, activation = 'relu'))
-#model.add(Dropout(0.3))
-model.add(Dense(1, activation = 'sigmoid'))
+#%% Train the fine tuning model
 
-# Compiling our masterpiece
-model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-6), 
-              loss = 'binary_crossentropy', 
-              metrics = ['accuracy'])
+def feature_extractor_fine_tuning(trainimgs, trainlbs, testimgs):
+    
+    # Form the base model
+    base_model = resnet50.ResNet50(include_top = False, weights ='imagenet', input_shape = (224,224,3))
+    inputs = keras.Input(shape=(224,224,3))
+    
+    # Check length of model layers, if desired
+    # print(len(base_model.layers))
+    
+    # Choose which layers to kept frozen or unfrozen
+    for layer in base_model.layers[:155]: # the first 155 layers
+        layer.trainable = False 
+    
+    # Construct the architecture
+    x = inputs                                          # Start with image input
+    x = base_model(x)                                   # pass thru Resnet50
+    x = Flatten()(x)                                    # Flatten (just like above!)
+    x = layers.Dense(256, activation = 'relu')(x)       # Pass thru the dense 256 arch
+    x = layers.Dropout(0.5)(x)                          # Add dropout
+    outputs = layers.Dense(1, activation='sigmoid')(x)  # Final classification layer
+    
+    # Compile and train the model
+    model_FineTune = Model(inputs, outputs)
+    model_FineTune.summary()
+    model_FineTune.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-6), 
+                  loss = 'binary_crossentropy', 
+                  metrics = ['accuracy']) # keep a low learning rate
+    
+    # Perform training. NOTE: takes around 4 min/epoch so be careful!
+    ne = 20
+    batch_size = 16
+    history = model_FineTune.fit(trainimgs, trainlbs, 
+                        validation_split = 0.25, 
+                        epochs = ne, 
+                        verbose = 1,
+                        batch_size = batch_size,
+                        shuffle=True)
+    
+    # Return the results!
+    # On this model, we only need to return the testimages because we're NOT
+    # running them thru the bottleneck first
+    return history, model_FineTune, testimgs, ne
 
 
-"""
-Let's train the model and take a look at how it does
-"""
-ne = 30
-batch_size = 16
-history = model.fit(trainimgs_res, trainlbs, 
-                    validation_split = 0.25, 
-                    epochs = ne, 
-                    verbose = 1,
-                    batch_size = batch_size,
-                    shuffle=True)
+#%% Call fcn to train the model!
+history, model, testimgs_res, ne = feature_extractor_training(trainimgs, trainlbs, testimgs)
+#history, model, testimgs_res, ne = feature_extractor_fine_tuning(trainimgs, trainlbs, testimgs)
+print("Training Complete!")
 
-
-#%%
+#%% Perform the visualization
 '''
 Visualization: inspect how the training went
 '''
@@ -287,11 +370,9 @@ plt.show()
 
 #%% Implement some statistics
 
-test_res = model.predict(testimgs_res)
+# Check how well we did on the test data!
+test_res= model.predict(testimgs_res)
 test_res_binary = np.round(test_res)
-#print(testlbls)
-#print(test_res_binary.shape)
-#print(len(testlbls))
 
 # build out the components of a confusion matrix
 n00, n01, n10, n11 = 0, 0, 0, 0 
@@ -318,21 +399,27 @@ n1 = n10 + n11
 # As defined in:
     # Introducing Image Classification Efficacies, Shao et al 2021
     # or https://arxiv.org/html/2406.05068v1
+    # or https://neptune.ai/blog/evaluation-metrics-binary-classification
     
+TP = n11
+TN = n00
+FP = n01
+FN = n10
     
 acc = (n00 + n11) / len(testlbls) # complete accuracy
-Se = n11 / n1 # true positive success rate
+Se = n11 / n1 # true positive success rate, recall
 Sp = n00 / n0 # true negative success rate
 Pp = n11 / (n11 + n01) # correct positive cases over all pred positive
 Np = n00 / (n00 + n10) # correct negative cases over all pred negative
-
+Recall = TP/(TP+FN) # Probability of detection
+FRP = FP/(FP+TN) # False positive, probability of a false alarm
 
 # Rate comapared to guessing
 # MICE -> 1: perfect classification. -> 0: just guessing
 A0 = (n0/len(testlbls))**2 + (n1/len(testlbls))**2
 MICE = (acc - A0)/(1-A0)   
 
-#%%
+#%% Print out the summary statistics
 ntot = len(testlbls)
 print("------------Test Results------------")
 print("            Predicted Class         ")
@@ -346,5 +433,12 @@ print(f"     0        {n00/ntot}      {n01/ntot}    {n0}")
 print(f"     1        {n10/ntot}      {n11/ntot}    {n1}")
 print("")
 print(f"Model Accuracy: {acc}, Sensitivity: {Se}, Specificity: {Sp}")
-print(f"True Positive rate: {Pp}, True Negative Rate: {Np}")
+print(f"Precision: {Pp},  Recall: {Recall}, False Pos Rate: {FRP}")
 print(f"MICE (0->guessing, 1->perfect classification): {MICE}")
+print("")
+print(f"True Pos: {n11}, True Neg: {n00}, False Pos: {n01}, False Neg: {n10}")
+
+
+#%% Save off the model, if desired
+model.save('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\ConeFlareRe45.keras')
+
