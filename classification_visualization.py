@@ -283,8 +283,9 @@ print(f"Whole-set MICE Score: {np.mean(MICE)}")
 
 
 #%% Form an ROC curve
+from sklearn.metrics import roc_curve, auc, precision_recall_curve, average_precision_score
 thresholds = np.linspace(0, 1, num=50)
-TPRs, FPRs = [], []
+TPRs, FPRs, Pres = [], [], []
 # Loop thru the thresholds
 for threshold in thresholds:
     TP, FP, TN, FN = 0, 0, 0, 0
@@ -297,7 +298,8 @@ for threshold in thresholds:
         confid_img = confidence_history[i]
         slice_classification = []
         
-        # Form the classification
+        # Form the classification list under the new thrshold
+        n00, n01, n10, n11 = 0, 0, 0, 0 
         for j in range(len(WP_io_img)):
             if confid_img[j] > threshold:
                 slice_classification.append(1)
@@ -305,7 +307,6 @@ for threshold in thresholds:
                 slice_classification.append(0)
                 
             # Now compute the TPR/FPR of the frame
-            n00, n01, n10, n11 = 0, 0, 0, 0 
             if WP_io_img[j] == 0:
                 if slice_classification[j] == 0:
                     n00 += 1
@@ -323,26 +324,40 @@ for threshold in thresholds:
         TN = TN + n00
         FN = FN + n10
         
-        
     # Now calculate the percentages
     TPRs.append(TP/(TP+FN))
     FPRs.append(FP/(FP+TN))
+    if (TP+FP) == 0:
+        Pres.append(1.0)
+    else:
+        Pres.append(TP/(TP+FP))
     
 
 # Compute the AUC of the ROC - simple rectangular integration
-del_thresholds = thresholds[1] - thresholds[0]
 AUC = 0.0
 for i in range(1,len(TPRs)):
-    AUC = AUC + del_thresholds*(TPRs[i]+TPRs[i-1])/2    
-print(f'Area under the ROC = {AUC}')
+    AUC = AUC + (FPRs[i-1]-FPRs[i])*(TPRs[i]+TPRs[i-1])/2    
+print(f'Area under the ROC Curve = {AUC}')
+
+PR = 0.0
+for i in range(1,len(TPRs)):
+    PR = PR + (Pres[i]+Pres[i-1])*(TPRs[i-1]-TPRs[i])/2    
+print(f'Area under the PR Curve = {PR}')
 
 # Plot the curve
-fig, ax = plt.subplots(1, figsize = (8,8))
+fig, (ax, ax2) = plt.subplots(1,2, figsize = (16,8))
 ax.plot(FPRs, TPRs, '--.', markersize=10)
 ax.plot(np.linspace(0,1,num=100), np.linspace(0,1,num=100))
 ax.set_title('ROC Curve')
 ax.set_xlabel('False Positive Rate')
 ax.set_ylabel('True Positive Rate')
+
+ax2.plot(TPRs, Pres, '--.', markersize=10)
+ax2.plot(np.linspace(0,1,num=100), np.flip(np.linspace(0,1,num=100)))
+ax2.set_title('Precision-Recall Curve')
+ax2.set_xlabel('Recall (True Positive Rate)')
+ax2.set_ylabel('Precision')
+
 plt.show()
 
 
