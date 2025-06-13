@@ -42,14 +42,14 @@ output = tf.keras.layers.Flatten()(output)
 resnet_model = Model(model1.input,output)
 
 # load the classifier
-model = keras.models.load_model('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\ConeFlareRe45.keras')
+model = keras.models.load_model('C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\Test1\\run33\\run33_relabeled.keras')
 
 
 #%% read in images
 print('Reading training data file')
 
 # Write File Name
-file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\ConeFlare_Shot67_re45_0deg\\training_data.txt'
+file_name = 'C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\Test1\\run33\\wavepacket_labels.txt'
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()
@@ -144,7 +144,7 @@ FP_history = []
 FN_history = []
 WP_io_history = []
 confidence_history = []
-plot_flag = 1       # View the images? MUCH SLOWER
+plot_flag = 0       # View the images? MUCH SLOWER
 
 for i_iter in range(N_img):
     
@@ -181,14 +181,16 @@ for i_iter in range(N_img):
         if classification_result[i] == 1:
             rect = Rectangle((i*slice_width, 5), slice_width, height-10,
                                      linewidth=0.5, edgecolor='red', facecolor='none')
+            if plot_flag == 1:
+                ax.add_patch(rect)
+                
+        if plot_flag == 1:         
+            # Adds a rectangle for the confidence of classification at every square
+            prob = confidence[i,0]
+            rect = Rectangle((i*slice_width, 5), slice_width, height-10,
+            linewidth=1.0*prob*prob, edgecolor='red', facecolor='none')
             ax.add_patch(rect)
-            
-        # Adds a rectangle for the confidence of classification at every square
-        prob = confidence[i,0]
-        rect = Rectangle((i*slice_width, 5), slice_width, height-10,
-        linewidth=1.0*prob*prob, edgecolor='red', facecolor='none')
-        ax.add_patch(rect)
-        ax.text(i*slice_width, height+40,round(prob,2), fontsize = 7)
+            ax.text(i*slice_width, height+40,round(prob,2), fontsize = 7)
             
             
     # Compute the inter-image accuracy
