@@ -100,7 +100,7 @@ def image_splitting(i, lines):
         x_max = x_min + box_width
         y_max = y_min + box_height
     
-    for i in range(num_slices-1):
+    for i in range(num_slices):
         x_start = i * slice_width
         x_end = (i + 1) * slice_width
     
