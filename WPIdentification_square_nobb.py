@@ -79,13 +79,13 @@ def get_bottleneck_features(model, input_imgs):
 	features = model.predict(input_imgs, verbose = 1)
 	return features
 
-def img_preprocess(input_image):
+def img_preprocess(input_image, label):
     input_image = np.stack((input_image,)*3,axis = -1)
     input_image = array_to_img(input_image)
     input_image = input_image.resize((224,224))
     input_image = img_to_array(input_image)
     #input_image = (input_image / 127.5) - 1
-    return input_image
+    return input_image, label
 
 
 #%% Read training data file
@@ -207,12 +207,11 @@ print('Done sampling images!')
 # Keras should shuffle our images for us - probably don't need to do!
 Imagelist = np.array(Imagelist)
 WP_io = np.array(WP_io)
-Imagelist_resized = np.array([img_preprocess(img) for img in Imagelist])
-print("Done Resizing")
+print("Done inputting to np.array's")
 
 #%% Create dataset - see https://www.youtube.com/watch?v=OqWbsbLhKws&list=WL
 
-dataset = tf.data.Dataset.from_tensor_slices((Imagelist_resized, WP_io)) #can maybe combine data augmentation and preprocessing for (potentially) more efficiently and likely more simplicity
+dataset = tf.data.Dataset.from_tensor_slices((Imagelist, WP_io)) #can maybe combine data augmentation and preprocessing for (potentially) more efficiently and likely more simplicity
 #print(list(dataset.as_numpy_iterator())) #for troubleshooting/understanding
 
 #dataset = dataset.shuffle(5) #ignore first # from bummer, then take the next available; higher buffer # is more random; ideal buffer is equal to the size of the dataset, but that can be unrealistically large
@@ -222,9 +221,14 @@ batched_dataset = dataset.shuffle(1024).batch(16)
 train_size = int(0.8 * len(batched_dataset))
 train_dataset = batched_dataset.take(train_size)
 test_dataset = batched_dataset.skip(train_size)
+#WORKING HERE <-----------------------------------------------------------------------------------------------------------------------------
+# Training dataset
+train_dataset = train_dataset.map(img_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
+train_dataset = train_dataset.prefetch(tf.data.AUTOTUNE)
 
-
-
+# Test dataset
+test_dataset = test_dataset.map(img_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
+test_dataset = test_dataset.prefetch(tf.data.AUTOTUNE)
 
 #%% Split the test and train images
 
@@ -256,8 +260,8 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     Defining and training our classification NN: after passing through resnet50,
     images are then passed through this network and classified. 
     '''    
-    trainimgs_res = get_bottleneck_features(resnet_model, train_dataset.Imagelist_resized)
-    testimgs_res = get_bottleneck_features(resnet_model, test_dataset.Imagelist_resized)
+    trainimgs_res = get_bottleneck_features(resnet_model, train_dataset.Imagelist)
+    testimgs_res = get_bottleneck_features(resnet_model, test_dataset.Imagelist)
     
     # Generate an input shape for our classification layers
     input_shape = resnet_model.output_shape[1]
