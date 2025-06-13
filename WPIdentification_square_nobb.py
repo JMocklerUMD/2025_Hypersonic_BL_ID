@@ -96,7 +96,7 @@ that can be passed to the keras NN trainer
 print('Reading training data file')
 
 # Write File Name
-file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\ConeFlare_Shot67_re45_0deg\\wavepacket_labels.txt'
+file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\ConeFlare_Shot67_re45_0deg\\training_data.txt'
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()

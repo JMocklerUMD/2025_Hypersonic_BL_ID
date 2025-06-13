@@ -49,7 +49,7 @@ model = keras.models.load_model('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2
 print('Reading training data file')
 
 # Write File Name
-file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\ConeFlare_Shot67_re45_0deg\\wavepacket_labels.txt'
+file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\ConeFlare_Shot67_re45_0deg\\training_data.txt'
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()
@@ -142,6 +142,8 @@ TP_history = []
 TN_history = []
 FP_history = []
 FN_history = []
+WP_io_history = []
+confidence_history = []
 plot_flag = 1       # View the images? MUCH SLOWER
 
 for i_iter in range(N_img):
@@ -199,6 +201,8 @@ for i_iter in range(N_img):
     FP_history.append(n01)
     FN_history.append(n10)
     acc_history.append(acc)
+    confidence_history.append(confidence)
+    WP_io_history.append(WP_io)
     
     if plot_flag == 1:
         # Check if there's even a bounding box in the image
@@ -278,17 +282,68 @@ print(f"Whole-set False Negative rate: {np.mean(FN_history)/Nframe_per_img}")
 print(f"Whole-set MICE Score: {np.mean(MICE)}")
 
 
-#%% misc tests
-# Restack and plot the image
-#imageReconstruct = np.hstack([image for image in Imagelist])
+#%% Form an ROC curve
+thresholds = np.linspace(0, 1, num=50)
+TPRs, FPRs = [], []
+# Loop thru the thresholds
+for threshold in thresholds:
+    TP, FP, TN, FN = 0, 0, 0, 0
+    
+    # Loop thru each image in the test set
+    for i in range(len(acc_history)):
+        
+        # Pull off the sliced list
+        WP_io_img = WP_io_history[i]
+        confid_img = confidence_history[i]
+        slice_classification = []
+        
+        # Form the classification
+        for j in range(len(WP_io_img)):
+            if confid_img[j] > threshold:
+                slice_classification.append(1)
+            else:
+                slice_classification.append(0)
+                
+            # Now compute the TPR/FPR of the frame
+            n00, n01, n10, n11 = 0, 0, 0, 0 
+            if WP_io_img[j] == 0:
+                if slice_classification[j] == 0:
+                    n00 += 1
+                if slice_classification[j] == 1:
+                    n01 += 1 
+            elif WP_io_img[j] == 1:
+                if slice_classification[j] == 0:
+                    n10 += 1
+                if slice_classification[j] == 1:
+                    n11 += 1
+        
+        # Finally, add to the grand list per threshold
+        TP = TP + n11
+        FP = FP + n01
+        TN = TN + n00
+        FN = FN + n10
+        
+        
+    # Now calculate the percentages
+    TPRs.append(TP/(TP+FN))
+    FPRs.append(FP/(FP+TN))
+    
 
-#fig, ax = plt.subplots(1)
-#ax.imshow(imageReconstruct, cmap = 'gray')
+# Compute the AUC of the ROC - simple rectangular integration
+del_thresholds = thresholds[1] - thresholds[0]
+AUC = 0.0
+for i in range(1,len(TPRs)):
+    AUC = AUC + del_thresholds*(TPRs[i]+TPRs[i-1])/2    
+print(f'Area under the ROC = {AUC}')
 
-#Imagelist, WP_io, slice_width, height, sm_bounds = image_splitting(i_iter, lines)
-#ax.add_patch(Rectangle((sm_bounds[0],sm_bounds[1]), sm_bounds[2], sm_bounds[3], edgecolor='red', facecolor='none'))
-
-#plt.show()
+# Plot the curve
+fig, ax = plt.subplots(1, figsize = (8,8))
+ax.plot(FPRs, TPRs, '--.', markersize=10)
+ax.plot(np.linspace(0,1,num=100), np.linspace(0,1,num=100))
+ax.set_title('ROC Curve')
+ax.set_xlabel('False Positive Rate')
+ax.set_ylabel('True Positive Rate')
+plt.show()
 
 
 
