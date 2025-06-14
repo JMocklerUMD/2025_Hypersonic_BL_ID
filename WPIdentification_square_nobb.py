@@ -78,7 +78,7 @@ def get_bottleneck_features(model, input_imgs):
 	print('Getting Feature Data From ResNet...')
 	features = model.predict(input_imgs, verbose = 1)
 	return features
-
+''' Old numpy array version of img_preprocess
 def img_preprocess(input_image, label):
     input_image = np.stack((input_image,)*3,axis = -1)
     input_image = array_to_img(input_image)
@@ -86,6 +86,19 @@ def img_preprocess(input_image, label):
     input_image = img_to_array(input_image)
     #input_image = (input_image / 127.5) - 1
     return input_image, label
+'''
+
+#dataset version
+def img_preprocess(image, label):
+    image = tf.image.resize(image, [224, 224])
+    image = tf.expand_dims(image, axis=-1) #change array shape for an image from [H,W] to [H,W,1] to conform to grayscale_to_rgb expectations
+    image = tf.image.grayscale_to_rgb(image)
+    return image, label
+
+#putting this before instead of imbedding within the ML model allows it to run parallel on CPU instead of GPU 
+data_augmentation = keras.Sequential(
+    
+    )
 
 
 #%% Read training data file
@@ -214,9 +227,11 @@ print("Done inputting to np.array's")
 dataset = tf.data.Dataset.from_tensor_slices((Imagelist, WP_io)) #can maybe combine data augmentation and preprocessing for (potentially) more efficiently and likely more simplicity
 #print(list(dataset.as_numpy_iterator())) #for troubleshooting/understanding
 
+batch_size = 16
+
 #dataset = dataset.shuffle(5) #ignore first # from bummer, then take the next available; higher buffer # is more random; ideal buffer is equal to the size of the dataset, but that can be unrealistically large
 #1024 choosen due to its use as an example in the above YT video - small enough to be reasonable, large enough to be somewhat random; if len(dataset)<1024, it shuffles as if buffer==len(dataset)
-batched_dataset = dataset.shuffle(1024).batch(16) 
+batched_dataset = dataset.shuffle(1024).batch(batch_size) 
 
 train_size = int(0.8 * len(batched_dataset))
 train_dataset = batched_dataset.take(train_size)
@@ -224,12 +239,13 @@ test_dataset = batched_dataset.skip(train_size)
 #WORKING HERE <-----------------------------------------------------------------------------------------------------------------------------
 # Training dataset
 train_dataset = train_dataset.map(img_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
-train_dataset = train_dataset.prefetch(tf.data.AUTOTUNE)
+train_dataset = train_dataset.prefetch(tf.data.AUTOTUNE)  #.batch(batch_size) before prefetch
 
 # Test dataset
 test_dataset = test_dataset.map(img_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
-test_dataset = test_dataset.prefetch(tf.data.AUTOTUNE)
+test_dataset = test_dataset.prefetch(tf.data.AUTOTUNE)  #.batch(batch_size) before prefetch
 
+print('Done creating datasets')
 #%% Split the test and train images
 
 #trainimgs, testimgs, trainlbs, testlbls = train_test_split(Imagelist_resized,WP_io, test_size=0.2, random_state=69)
@@ -237,7 +253,7 @@ test_dataset = test_dataset.prefetch(tf.data.AUTOTUNE)
 
 #%% Train the feature extractor model only
 
-def feature_extractor_training(trainimgs, trainlbs, testimgs):
+def feature_extractor_training(train_dataset, test_dataset):
     """
     Building the Resnet50 model: images are first passed through the Reset50 model
     prior to passing through one last NN layer that we will define. Initialize
@@ -260,7 +276,7 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     Defining and training our classification NN: after passing through resnet50,
     images are then passed through this network and classified. 
     '''    
-    trainimgs_res = get_bottleneck_features(resnet_model, train_dataset.Imagelist)
+    #trainimgs_res = get_bottleneck_features(resnet_model, train_dataset.Imagelist)
     testimgs_res = get_bottleneck_features(resnet_model, test_dataset.Imagelist)
     
     # Generate an input shape for our classification layers
@@ -375,7 +391,7 @@ def feature_extractor_fine_tuning(trainimgs, trainlbs, testimgs):
 '''
 
 #%% Call fcn to train the model!
-history, model, testimgs_res, ne = feature_extractor_training(trainimgs, trainlbs, testimgs)
+history, model, testimgs_res, ne = feature_extractor_training(train_dataset, test_dataset)
 #history, model, testimgs_res, ne = feature_extractor_fine_tuning(trainimgs, trainlbs, testimgs)
 print("Training Complete!")
 
@@ -415,7 +431,7 @@ test_res_binary = np.round(test_res)
 # build out the components of a confusion matrix
 n00, n01, n10, n11 = 0, 0, 0, 0 
 
-for i, label_true in enumerate(testlbls):
+for i, label_true in enumerate(test_dataset.WP_io):
     label_pred = test_res_binary[i]
     
     if label_true == 0:
@@ -444,7 +460,7 @@ TN = n00
 FP = n01
 FN = n10
     
-acc = (n00 + n11) / len(testlbls) # complete accuracy
+acc = (n00 + n11) / len(test_dataset.WP_io) # complete accuracy
 Se = n11 / n1 # true positive success rate, recall
 Sp = n00 / n0 # true negative success rate
 Pp = n11 / (n11 + n01) # correct positive cases over all pred positive
@@ -454,11 +470,11 @@ FRP = FP/(FP+TN) # False positive, probability of a false alarm
 
 # Rate comapared to guessing
 # MICE -> 1: perfect classification. -> 0: just guessing
-A0 = (n0/len(testlbls))**2 + (n1/len(testlbls))**2
+A0 = (n0/len(test_dataset.WP_io))**2 + (n1/len(test_dataset.WP_io))**2
 MICE = (acc - A0)/(1-A0)   
 
 #%% Print out the summary statistics
-ntot = len(testlbls)
+ntot = len(test_dataset.WP_io)
 print("------------Test Results------------")
 print("            Predicted Class         ")
 print("True Class     0        1    Totals ")
