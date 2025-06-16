@@ -92,9 +92,9 @@ def img_preprocess(input_image, label):
 
 #dataset version
 def img_preprocess(image, label):
-    image = tf.image.resize(image, [224, 224])
     image = tf.expand_dims(image, axis=-1) #change array shape for an image from [H,W] to [H,W,1] to conform to grayscale_to_rgb expectations
     image = tf.image.grayscale_to_rgb(image)
+    image = tf.image.resize(image, [224, 224])
     return image, label
 
 #putting this before instead of imbedding within the ML model allows it to run parallel on CPU instead of GPU 
@@ -233,27 +233,27 @@ batch_size = 16
 
 #dataset = dataset.shuffle(5) #ignore first # from bummer, then take the next available; higher buffer # is more random; ideal buffer is equal to the size of the dataset, but that can be unrealistically large
 #1024 choosen due to its use as an example in the above YT video - small enough to be reasonable, large enough to be somewhat random; if len(dataset)<1024, it shuffles as if buffer==len(dataset)
-batched_dataset = dataset.shuffle(1024).batch(batch_size) 
+shuffled_dataset = dataset.shuffle(1024)
 
-train_size = int(0.8 * len(batched_dataset))
-train_dataset = batched_dataset.take(train_size)
-test_dataset = batched_dataset.skip(train_size)
+train_size = int(0.8 * len(shuffled_dataset))
+train_dataset = shuffled_dataset.take(train_size)
+test_dataset = shuffled_dataset.skip(train_size)
 
-val_size = int(0.25 * len(batched_dataset))
+val_size = int(0.25 * len(train_dataset))
 val_dataset = train_dataset.take(val_size)
 train_dataset = train_dataset.skip(val_size)
 
 # Training dataset
 train_dataset = train_dataset.map(img_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
-train_dataset = train_dataset.prefetch(tf.data.AUTOTUNE)  #.batch(batch_size) before prefetch
+train_dataset = train_dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)  #.batch(batch_size) before prefetch
 
 # Validation dataset
 val_dataset = val_dataset.map(img_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
-val_dataset = val_dataset.prefetch(tf.data.AUTOTUNE)  #.batch(batch_size) before prefetch
+val_dataset = val_dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)  #.batch(batch_size) before prefetch
 
 # Test dataset
 test_dataset = test_dataset.map(img_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
-test_dataset = test_dataset.prefetch(tf.data.AUTOTUNE)  #.batch(batch_size) before prefetch
+test_dataset = test_dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)  #.batch(batch_size) before prefetch
 
 print('Done creating datasets')
 #%% Split the test and train images
