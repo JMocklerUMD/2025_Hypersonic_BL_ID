@@ -16,7 +16,7 @@ import tensorflow as tf
 
 from keras import optimizers, layers, regularizers
 
-from keras.applications import resnet50, vgg16
+from keras.applications import ResNet50, vgg16
 
 from keras.callbacks import EarlyStopping
 
@@ -41,6 +41,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.svm import SVC
 from sklearn.utils import class_weight
 #import cv2
+
+from sklearn.utils.class_weight import compute_class_weight
 
 
 #from tensorflow.keras.callbacks import EarlyStopping
@@ -111,7 +113,7 @@ that can be passed to the keras NN trainer
 print('Reading training data file')
 
 # Write File Name
-file_name = 'C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\Test1\\run33\\wavepacket_labels.txt'
+file_name = 'C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\wavepacket_labels_combined.txt'
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()
@@ -236,10 +238,18 @@ batched_dataset = dataset.shuffle(1024).batch(batch_size)
 train_size = int(0.8 * len(batched_dataset))
 train_dataset = batched_dataset.take(train_size)
 test_dataset = batched_dataset.skip(train_size)
-#WORKING HERE <-----------------------------------------------------------------------------------------------------------------------------
+
+val_size = int(0.25 * len(batched_dataset))
+val_dataset = train_dataset.take(val_size)
+train_dataset = train_dataset.skip(val_size)
+
 # Training dataset
 train_dataset = train_dataset.map(img_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
 train_dataset = train_dataset.prefetch(tf.data.AUTOTUNE)  #.batch(batch_size) before prefetch
+
+# Validation dataset
+val_dataset = val_dataset.map(img_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
+val_dataset = val_dataset.prefetch(tf.data.AUTOTUNE)  #.batch(batch_size) before prefetch
 
 # Test dataset
 test_dataset = test_dataset.map(img_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
@@ -251,8 +261,62 @@ print('Done creating datasets')
 #trainimgs, testimgs, trainlbs, testlbls = train_test_split(Imagelist_resized,WP_io, test_size=0.2, random_state=69)
 #print("Done Splitting")
 
-#%% Train the feature extractor model only
+#%% create the model - from YT Video "Transfer Learning with CNNs - Deep Learning with Tensorflow | Ep. 20" by Kody Simpson
+conv_base = ResNet50(weights="imagenet", include_top=False,input_shape=(224,224,3))
+conv_base.trainable = False;
 
+inputs = keras.Input(shape=(224,224,3))
+x = inputs
+x = tf.keras.applications.resnet50.preprocess_input(x) #preprocesses x for resnet50
+x = conv_base(x) #base of resnet50
+x = layers.Flatten()(x)
+x = layers.Dense(256, 
+                 activation='relu',
+                 kernel_regularizer=regularizers.L1L2(l1=1e-4, l2=1e-4),     # Regularization penality term
+                 bias_regularizer=regularizers.L2(1e-4))(x) # Additional regularization penalty term
+x = layers.Dropout(0.5)(x)
+outputs = layers.Dense(1, activation = 'sigmoid')(x) # Add dropout to make the system more robust
+
+model = keras.Model(inputs=inputs, outputs=outputs)
+
+model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-6), 
+              loss = 'binary_crossentropy', 
+              metrics = ['accuracy'])
+print('Done compiling model')
+
+#%%Train model
+
+# Get unique classes and compute weights
+labels = []
+for _, label in train_dataset:
+    labels.append(label.numpy())
+labels = np.array(labels).flatten()
+classes = np.unique(labels)
+
+class_weights = compute_class_weight(
+    class_weight='balanced',
+    classes=classes,
+    y=labels
+    )
+
+# Convert to dictionary format required by Keras
+class_weights_dict = dict(zip(classes, class_weights))
+print("Class weights:", class_weights_dict)
+
+ne = 20
+batch_size = 16
+history = model.fit(train_dataset, 
+                     validation_data = val_dataset, 
+                     epochs = ne, 
+                     verbose = 1,
+                     batch_size = batch_size,
+                     shuffle=True,
+                     class_weight = class_weights_dict
+                     #,callbacks=[early_stopping]
+                     )
+print('Done training model')
+#%% Train the feature extractor model only
+'''
 def feature_extractor_training(train_dataset, test_dataset):
     """
     Building the Resnet50 model: images are first passed through the Reset50 model
@@ -272,10 +336,10 @@ def feature_extractor_training(train_dataset, test_dataset):
     	layer.trainable = False
     
     
-    '''
-    Defining and training our classification NN: after passing through resnet50,
-    images are then passed through this network and classified. 
-    '''    
+    
+    #Defining and training our classification NN: after passing through resnet50,
+    #images are then passed through this network and classified. 
+    
     #trainimgs_res = get_bottleneck_features(resnet_model, train_dataset.Imagelist)
     testimgs_res = get_bottleneck_features(resnet_model, test_dataset.Imagelist)
     
@@ -313,7 +377,7 @@ def feature_extractor_training(train_dataset, test_dataset):
     # Inspect the resulting model
     model.summary()
     
-    '''
+    
     #early stopping code from Google search AI
     early_stopping = EarlyStopping(
         monitor='val_accuracy',  # Metric to monitor (e.g., validation loss)
@@ -321,7 +385,6 @@ def feature_extractor_training(train_dataset, test_dataset):
         min_delta=0.001,    # Minimum change to be considered an improvement
         restore_best_weights=True # Whether to restore the model weights to the best epoch
     )
-    '''
     
     # Train the model! Takes about 20 sec/epoch
     ne = 20
@@ -340,7 +403,7 @@ def feature_extractor_training(train_dataset, test_dataset):
     # On this model, we need to return the processed test images for validation 
     # in the later step
     return history, model, testimgs_res, ne
-
+'''
 #%% Train the fine tuning model
 
 '''
@@ -391,14 +454,15 @@ def feature_extractor_fine_tuning(trainimgs, trainlbs, testimgs):
 '''
 
 #%% Call fcn to train the model!
+'''
 history, model, testimgs_res, ne = feature_extractor_training(train_dataset, test_dataset)
 #history, model, testimgs_res, ne = feature_extractor_fine_tuning(trainimgs, trainlbs, testimgs)
-print("Training Complete!")
+print("Training Complete!")'''
 
 #%% Perform the visualization
 '''
 Visualization: inspect how the training went
-'''
+
 #model.save('ClassifierV1m.h5')
 epoch_list = list(range(1,ne + 1))
 # Making some plots to show our results
@@ -491,8 +555,8 @@ print(f"Precision: {Pp},  Recall: {Recall}, False Pos Rate: {FRP}")
 print(f"MICE (0->guessing, 1->perfect classification): {MICE}")
 print("")
 print(f"True Pos: {n11}, True Neg: {n00}, False Pos: {n01}, False Neg: {n10}")
-
+'''
 
 #%% Save off the model, if desired
-model.save('C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\Test1\\run33\\run33_relabeled.keras')
+#model.save('C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\Test1\\run33\\run33_relabeled.keras')
 
