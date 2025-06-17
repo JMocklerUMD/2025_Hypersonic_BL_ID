@@ -205,7 +205,7 @@ while (img_count < N_img) and (i_sample < N_tot):
     # Inspect what images were selected later
     sampled_list.append(i_sample)
 
-print('Done sampling images!')
+print('Done sampling images')
 
 #%% Catches any arrays that are not correct size
 #omit_array = []
@@ -242,6 +242,18 @@ test_dataset = shuffled_dataset.skip(train_size)
 val_size = int(0.25 * len(train_dataset))
 val_dataset = train_dataset.take(val_size)
 train_dataset = train_dataset.skip(val_size)
+
+# Get unique classes and compute weights
+labels = []
+for _, label in train_dataset:
+    labels.append(label.numpy())
+labels = np.array(labels).flatten()
+classes = np.unique(labels)
+
+class_weights = compute_class_weight(
+    class_weight='balanced',
+    classes=classes,
+    y=labels)
 
 # Training dataset
 train_dataset = train_dataset.map(img_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
@@ -285,19 +297,6 @@ model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-6),
 print('Done compiling model')
 
 #%%Train model
-
-# Get unique classes and compute weights
-labels = []
-for _, label in train_dataset:
-    labels.append(label.numpy())
-labels = np.array(labels).flatten()
-classes = np.unique(labels)
-
-class_weights = compute_class_weight(
-    class_weight='balanced',
-    classes=classes,
-    y=labels
-    )
 
 # Convert to dictionary format required by Keras
 class_weights_dict = dict(zip(classes, class_weights))
