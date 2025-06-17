@@ -1,5 +1,5 @@
-folder_path = 'C:\Users\cathe\Documents\MATLAB\trainML';
-file_path = fullfile(folder_path, 'training_data.txt');
+folder_path = 'C:\UMD GRADUATE\RESEARCH\Hypersonic Image ID\videos\Test1\ConeFlare_Shot67_re45_0deg\';
+file_path = fullfile(folder_path, 'training_data_CF_Re45_FINAL.txt');
 
 lines = readlines(file_path);
 len_lines = length(lines);

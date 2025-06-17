@@ -3,4 +3,6 @@ trained_classifier_RandomSampled.keras
 trained_classifier.keras
 ConeFlareRe45.keras
 ConeFlareRe33.keras
+ConeFlareRe45_normal.keras
+ConeFlareRe33_normal.keras
 

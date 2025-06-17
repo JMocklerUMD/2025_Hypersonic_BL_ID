@@ -20,7 +20,7 @@ from keras.preprocessing.image import array_to_img
 # This function tells our feature extractor to do its thing
 def get_bottleneck_features(model, input_imgs):
 	print('Getting Feature Data From ResNet...')
-	features = model.predict(input_imgs, verbose = 1)
+	features = model.predict(input_imgs, verbose = 0)
 	return features
 
 def img_preprocess(input_image):
@@ -38,14 +38,14 @@ output = tf.keras.layers.Flatten()(output)
 resnet_model = Model(model1.input,output)
 
 # load the classifier
-model = keras.models.load_model('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\ConeFlareRe45.keras')
+model = keras.models.load_model('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\ConeFlareRe33_normal.keras')
 
 
 #%% read in images
 print('Reading training data file')
 
 # Write File Name
-file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\ConeFlare_Shot64_re33_0deg\\training_data.txt'
+file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\ConeFlare_Shot64_re33_0deg\\Cam_cone_flare_Re33_FINAL.txt'
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()
@@ -125,7 +125,7 @@ def classify_the_images(model, Imagelist):
     Imagelist_res = get_bottleneck_features(resnet_model, Imagelist_resized)
     
     # Pass each through the trained NN
-    test_res= model.predict(Imagelist_res)
+    test_res= model.predict(Imagelist_res, verbose = 0)
     classification_result = np.round(test_res)
     
     return classification_result, test_res

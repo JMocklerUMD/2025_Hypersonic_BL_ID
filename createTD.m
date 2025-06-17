@@ -31,7 +31,7 @@ for k = 1:100:length(images)
     % subtract mean image from others
     for i = k:batch_end
         img = double(image_list{i});
-        img = mean_img - img;
+        img = img - mean_img;
         processed{i} = rescale(img, 0, 1);
     end
 end
