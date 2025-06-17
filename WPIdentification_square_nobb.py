@@ -95,6 +95,7 @@ def img_preprocess(image, label):
     image = tf.expand_dims(image, axis=-1) #change array shape for an image from [H,W] to [H,W,1] to conform to grayscale_to_rgb expectations
     image = tf.image.grayscale_to_rgb(image)
     image = tf.image.resize(image, [224, 224])
+    image = tf.keras.applications.resnet50.preprocess_input(image) #preprocesses x for resnet50
     return image, label
 
 #putting this before instead of imbedding within the ML model allows it to run parallel on CPU instead of GPU 
@@ -130,7 +131,7 @@ print('Begin writing training data to numpy array')
 WP_io = []
 #SM_bounds_Array = []
 Imagelist = []
-N_img, N_tot = 75, lines_len
+N_img, N_tot = 200, lines_len
 i_sample, img_count = 0, 0
 sampled_list = []
 
@@ -232,22 +233,41 @@ dataset = tf.data.Dataset.from_tensor_slices((Imagelist, WP_io)) #can maybe comb
 batch_size = 16
 
 #dataset = dataset.shuffle(5) #ignore first # from bummer, then take the next available; higher buffer # is more random; ideal buffer is equal to the size of the dataset, but that can be unrealistically large
-#1024 choosen due to its use as an example in the above YT video - small enough to be reasonable, large enough to be somewhat random; if len(dataset)<1024, it shuffles as if buffer==len(dataset)
-shuffled_dataset = dataset.shuffle(1024)
+#1024 COULD BE choosen due to its use as an example in the above YT video - small enough to be reasonable, large enough to be somewhat random; if len(dataset)<1024, it shuffles as if buffer==len(dataset)
+shuffled_dataset = dataset.shuffle(lines_len, reshuffle_each_iteration=False)
 
-train_size = int(0.8 * len(shuffled_dataset))
-train_dataset = shuffled_dataset.take(train_size)
-test_dataset = shuffled_dataset.skip(train_size)
+length = sum(1 for _ in shuffled_dataset)
 
-val_size = int(0.25 * len(train_dataset))
-val_dataset = train_dataset.take(val_size)
-train_dataset = train_dataset.skip(val_size)
+indexed_dataset = shuffled_dataset.enumerate()
 
-# Get unique classes and compute weights
+train_size = int(0.6 * length)
+val_size = int(0.2 * length)
+
+train_dataset = indexed_dataset.filter(lambda i, _: i < train_size)
+val_dataset = indexed_dataset.filter(lambda i, _: (i >= train_size) & (i < train_size + val_size))
+test_dataset = indexed_dataset.filter(lambda i, _: i >= train_size + val_size)
+
+'''
+print(lines_len)
+print(length)
+print("Train:", sum(1 for _ in train_dataset))
+print(train_size)
+print("Val:", sum(1 for _ in val_dataset))
+print(val_size)
+print("Test:", sum(1 for _ in test_dataset))
+'''
+
+# Remove index and preprocess
+train_dataset = train_dataset.map(lambda i, x: x).map(img_preprocess).batch(batch_size).prefetch(tf.data.AUTOTUNE)
+val_dataset = val_dataset.map(lambda i, x: x).map(img_preprocess).batch(batch_size).prefetch(tf.data.AUTOTUNE)
+test_dataset = test_dataset.map(lambda i, x: x).map(img_preprocess).batch(batch_size).prefetch(tf.data.AUTOTUNE)
+
+print('90% done creating datasets - everything, but repeating')
+#%% Get unique classes and compute weights
 labels = []
 for _, label in train_dataset:
-    labels.append(label.numpy())
-labels = np.array(labels).flatten()
+    labels.extend(label.numpy())
+labels = np.array(labels)
 classes = np.unique(labels)
 
 class_weights = compute_class_weight(
@@ -255,17 +275,14 @@ class_weights = compute_class_weight(
     classes=classes,
     y=labels)
 
-# Training dataset
-train_dataset = train_dataset.map(img_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
-train_dataset = train_dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)  #.batch(batch_size) before prefetch
+# Convert to dictionary format required by Keras
+class_weights_dict = dict(zip(classes, class_weights))
+print("Class weights:", class_weights_dict)
 
-# Validation dataset
-val_dataset = val_dataset.map(img_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
-val_dataset = val_dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)  #.batch(batch_size) before prefetch
-
-# Test dataset
-test_dataset = test_dataset.map(img_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
-test_dataset = test_dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)  #.batch(batch_size) before prefetch
+#%% allow train and val datasets to repeat (to avoid running out of dataset batches)
+print("Validation samples:", sum(1 for _ in val_dataset))
+train_dataset = train_dataset.repeat()
+val_dataset = val_dataset.repeat()
 
 print('Done creating datasets')
 #%% Split the test and train images
@@ -278,9 +295,7 @@ conv_base = ResNet50(weights="imagenet", include_top=False,input_shape=(224,224,
 conv_base.trainable = False;
 
 inputs = keras.Input(shape=(224,224,3))
-x = inputs
-x = tf.keras.applications.resnet50.preprocess_input(x) #preprocesses x for resnet50
-x = conv_base(x) #base of resnet50
+x = conv_base(inputs, training=False) #base of resnet50
 x = layers.Flatten()(x)
 x = layers.Dense(256, 
                  activation='relu',
@@ -298,18 +313,16 @@ print('Done compiling model')
 
 #%%Train model
 
-# Convert to dictionary format required by Keras
-class_weights_dict = dict(zip(classes, class_weights))
-print("Class weights:", class_weights_dict)
-
-ne = 20
-batch_size = 16
+ne = 5
+#batch_size = 16
 history = model.fit(train_dataset, 
                      validation_data = val_dataset, 
+                     validation_steps = int(val_size/batch_size),
                      epochs = ne, 
+                     steps_per_epoch = int(train_size/batch_size), #how many batches per epoch to go through, for None (I think) it tries to divide them evenly
                      verbose = 1,
-                     batch_size = batch_size,
-                     shuffle=True,
+                     shuffle=True, #ignored since our input is a tf.data.Dataset
+                     #batch_size = batch_size,
                      class_weight = class_weights_dict
                      #,callbacks=[early_stopping]
                      )
