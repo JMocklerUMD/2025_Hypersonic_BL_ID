@@ -2,7 +2,7 @@
 
 %% Read in and Process Images
 
-folder_path = 'C:\Users\cathe\Documents\MATLAB\trainML\T9Run4120';
+folder_path = 'C:\UMD GRADUATE\RESEARCH\Hypersonic Image ID\videos\Test1\ConeFlare_Shot64_re33_0deg';
 
 % read in files in folder
 images = dir(fullfile(folder_path, '*.tif'));
@@ -56,8 +56,9 @@ while i <= length(images)
     
     % display image
     img = processed{i};
-    img_enhanced = imadjust(img);
-    imshow(img_enhanced)
+    %img_enhanced = imadjust(img);
+    %imshow(img_enhanced)
+    imshow(img)
     set(gcf, 'WindowState', 'maximized')
     set(gcf, 'Color', 'k');  
     t = title(['Frame ' num2str(i)]);

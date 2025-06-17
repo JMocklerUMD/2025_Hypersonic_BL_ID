@@ -10,8 +10,8 @@ import tensorflow as tf
 from keras.applications import resnet50
 from keras.models import Model
 
-from keras.preprocessing import image
-from keras.preprocessing.image import load_img
+#from keras.preprocessing import image
+#from keras.preprocessing.image import load_img
 from keras.preprocessing.image import img_to_array
 from keras.preprocessing.image import array_to_img
 
@@ -31,10 +31,6 @@ def img_preprocess(input_image):
     #input_image = (input_image / 127.5) - 1
     return input_image
 
-def get_bottleneck_features(model, input_imgs):
-	print('Getting Feature Data From ResNet...')
-	features = model.predict(input_imgs, verbose = 1)
-	return features
 
 model1 = resnet50.ResNet50(include_top = False, weights ='imagenet', input_shape = (224,224,3))
 output = model1.output
@@ -49,7 +45,7 @@ model = keras.models.load_model('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2
 print('Reading training data file')
 
 # Write File Name
-file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\ConeFlare_Shot67_re45_0deg\\training_data.txt'
+file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\ConeFlare_Shot64_re33_0deg\\training_data.txt'
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()
@@ -188,7 +184,7 @@ for i_iter in range(N_img):
         rect = Rectangle((i*slice_width, 5), slice_width, height-10,
         linewidth=1.0*prob*prob, edgecolor='red', facecolor='none')
         ax.add_patch(rect)
-        ax.text(i*slice_width, height+40,round(prob,2), fontsize = 7)
+        ax.text(i*slice_width, height+60,round(prob,2), fontsize = 7)
             
             
     # Compute the inter-image accuracy
