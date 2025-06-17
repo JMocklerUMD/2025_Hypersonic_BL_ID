@@ -45,7 +45,7 @@ model = keras.models.load_model('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2
 print('Reading training data file')
 
 # Write File Name
-file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\ConeFlare_Shot64_re33_0deg\\Cam_cone_flare_Re33_FINAL.txt'
+file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\ConeFlare_Shot64_re33_0deg\\training_data.txt'
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()

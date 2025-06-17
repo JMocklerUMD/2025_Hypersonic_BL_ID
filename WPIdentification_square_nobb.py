@@ -73,30 +73,39 @@ def progress_bar(iteration, total, prefix = '', suffix = '', decimals = 1, lengt
 
 # This function tells our feature extractor to do its thing
 def get_bottleneck_features(model, input_imgs):
-	print('Getting Feature Data From ResNet...')
+	'''
+    Retrives the ResNet50 feature vector
+    INPUTS:  model:      resnet50 Keras model
+             input_imgs: (N, 224, 224, 3) numpy array of (224, 224, 3) images to extract features from       
+    OUTPUTS: featues:   (N, 100352) numpy array of extracted ResNet50 features
+    '''
+    print('Getting Feature Data From ResNet...')
 	features = model.predict(input_imgs, verbose = 1)
 	return features
 
 def img_preprocess(input_image):
+    '''
+    Reshapes the images for ResNet50 input
+    INPUTS:  input_image:       (64,64) numpy array of double image data prescaled between [0,1]     
+    OUTPUTS: processed_image:   (224, 224, 3) numpy array of the stretched input data
+    '''
     input_image = np.stack((input_image,)*3,axis = -1)
     input_image = array_to_img(input_image)
     input_image = input_image.resize((224,224))
-    input_image = img_to_array(input_image)
+    processed_image = img_to_array(input_image)
     #input_image = (input_image / 127.5) - 1
-    return input_image
+    return processed_image
 
 
 #%% Read training data file
-'''
-Preprocessing: the following block of codes accept the image data from a 
-big text file, parse them out, then process them into an array
-that can be passed to the keras NN trainer
-'''
+# PREPROCESSING: the following block of codes accept the image data from a 
+# big text file, parse them out, then process them into an array
+# that can be passed to the keras NN trainer
 
 print('Reading training data file')
 
 # Write File Name
-file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\ConeFlare_Shot64_re33_0deg\\Cam_cone_flare_Re33_FINAL.txt'
+file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\ConeFlare_Shot64_re33_0deg\\training_data.txt'
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()
@@ -113,7 +122,7 @@ print('Begin writing training data to numpy array')
 WP_io = []
 #SM_bounds_Array = []
 Imagelist = []
-N_img, N_tot = 350, lines_len
+N_img, N_tot = 250, lines_len
 i_sample, img_count = 0, 0
 sampled_list = []
 
@@ -190,19 +199,8 @@ while (img_count < N_img) and (i_sample < N_tot):
 
 print('Done sampling images!')
 
-#%% Catches any arrays that are not correct size
-#omit_array = []
-#for i in range(len(Imagelist)):
-#    if Imagelist[i].shape != (64, 64):
-#        omit_array.append(i)
-
-#Imagelist = [element for i, element in enumerate(Imagelist) if i not in omit_array]
-#WP_io = [element for i, element in enumerate(WP_io) if i not in omit_array]
-
 
 #%% Resizes the arrays
-# Imagelist,WP_io = Shuffler(Imagelist, WP_io)
-# Keras should shuffle our images for us - probably don't need to do!
 Imagelist = np.array(Imagelist)
 WP_io = np.array(WP_io)
 Imagelist_resized = np.array([img_preprocess(img) for img in Imagelist])
@@ -216,9 +214,16 @@ print("Done Splitting")
 
 def feature_extractor_training(trainimgs, trainlbs, testimgs):
     """
-    Building the Resnet50 model: images are first passed through the Reset50 model
-    prior to passing through one last NN layer that we will define. Initialize
-    this code block once!
+    Building the Resnet50 model: a 256-dense NN is trained on ResNet50 features to classify the images.
+    
+    INPUTS: trainimgs:      (N, 224, 224, 3) numpy array of (224, 224, 3) image slices to train the model.
+            trainlbs:       (N,1) numpy array of binary classes
+            testimgs:       (M, 224, 224, 3) numpy array of (224, 224, 3) image slices to test the model.
+    
+    OUTPUTS: history:       keras NN model training history object
+             model:         trained NN model of JUST the 256 dense NN
+             testimgs_res:  (M, 100532) ResNet50 feature vector for each test image slice
+             ne:            number of epochs trained
     """
 
     # Bringing in ResNet50 to use as our feature extractor
@@ -233,10 +238,9 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     	layer.trainable = False
     
     
-    '''
-    Defining and training our classification NN: after passing through resnet50,
-    images are then passed through this network and classified. 
-    '''    
+   
+    #Defining and training our classification NN: after passing through resnet50,
+    #images are then passed through this network and classified. 
     trainimgs_res = get_bottleneck_features(resnet_model, trainimgs)
     testimgs_res = get_bottleneck_features(resnet_model, testimgs)
     
@@ -293,7 +297,18 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
 #%% Train the fine tuning model
 
 def feature_extractor_fine_tuning(trainimgs, trainlbs, testimgs):
+    """
+    Building the Resnet50 model: a 256-dense NN and the top layers of the ResNet50 model are all trained
     
+    INPUTS: trainimgs:      (N, 224, 224, 3) numpy array of (224, 224, 3) image slices to train the model.
+            trainlbs:       (N,1) numpy array of binary classes
+            testimgs:       (M, 224, 224, 3) numpy array of (224, 224, 3) image slices to test the model.
+    
+    OUTPUTS: history:       keras NN model training history object
+             model:         trained NN model of JUST the 256 dense NN
+             testimgs_res:  (M, 100532) ResNet50 feature vector for each test image slice
+             ne:            number of epochs trained
+    """
     # Form the base model
     base_model = resnet50.ResNet50(include_top = False, weights ='imagenet', input_shape = (224,224,3))
     inputs = keras.Input(shape=(224,224,3))
