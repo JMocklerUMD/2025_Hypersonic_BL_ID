@@ -80,6 +80,7 @@ def get_bottleneck_features(model, input_imgs):
 	print('Getting Feature Data From ResNet...')
 	features = model.predict(input_imgs, verbose = 1)
 	return features
+
 ''' Old numpy array version of img_preprocess
 def img_preprocess(input_image, label):
     input_image = np.stack((input_image,)*3,axis = -1)
@@ -95,7 +96,7 @@ def img_preprocess(image, label):
     image = tf.expand_dims(image, axis=-1) #change array shape for an image from [H,W] to [H,W,1] to conform to grayscale_to_rgb expectations
     image = tf.image.grayscale_to_rgb(image)
     image = tf.image.resize(image, [224, 224])
-    image = tf.keras.applications.resnet50.preprocess_input(image) #preprocesses x for resnet50
+    #image = tf.keras.applications.resnet50.preprocess_input(image) #preprocesses x for resnet50 #seemed to make everything orange???
     return image, label
 
 #putting this before instead of imbedding within the ML model allows it to run parallel on CPU instead of GPU 
@@ -131,7 +132,7 @@ print('Begin writing training data to numpy array')
 WP_io = []
 #SM_bounds_Array = []
 Imagelist = []
-N_img, N_tot = 200, lines_len
+N_img, N_tot = 50, lines_len
 i_sample, img_count = 0, 0
 sampled_list = []
 
@@ -300,16 +301,41 @@ x = layers.Flatten()(x)
 x = layers.Dense(256, 
                  activation='relu',
                  kernel_regularizer=regularizers.L1L2(l1=1e-4, l2=1e-4),     # Regularization penality term
-                 bias_regularizer=regularizers.L2(1e-4))(x) # Additional regularization penalty term
-x = layers.Dropout(0.5)(x)
-outputs = layers.Dense(1, activation = 'sigmoid')(x) # Add dropout to make the system more robust
+                 bias_regularizer=regularizers.L2(1e-4)  # Additional regularization penalty term
+                 )(x) 
+x = layers.Dropout(0.5)(x) # Add dropout to make the system more robust
+outputs = layers.Dense(1, activation = 'sigmoid')(x) # final classification layer
 
 model = keras.Model(inputs=inputs, outputs=outputs)
 
 model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-6), 
               loss = 'binary_crossentropy', 
               metrics = ['accuracy'])
+
+model.summary()
+
 print('Done compiling model')
+
+#%%some troubleshooting
+#import matplotlib.pyplot as plt
+
+# Take one batch from the dataset
+for x_batch, y_batch in train_dataset.take(1):
+    print("Batch shape:", x_batch.shape)
+
+    # Loop through the first N samples in the batch
+    N = min(5, x_batch.shape[0])  # Adjust how many to visualize
+
+    for i in range(N):
+        img = tf.keras.utils.array_to_img(x_batch[i])
+        label = y_batch[i].numpy()
+
+        plt.figure()
+        plt.title(f"Label: {label}")
+        plt.imshow(img)
+        plt.axis('off')
+        plt.show()
+
 
 #%%Train model
 
@@ -472,8 +498,8 @@ history, model, testimgs_res, ne = feature_extractor_training(train_dataset, tes
 print("Training Complete!")'''
 
 #%% Perform the visualization
-'''
-Visualization: inspect how the training went
+
+#Visualization: inspect how the training went
 
 #model.save('ClassifierV1m.h5')
 epoch_list = list(range(1,ne + 1))
@@ -499,7 +525,7 @@ leg2 = pl2.legend(loc = "best")
 plt.show()
 
 #%% Implement some statistics
-
+'''
 # Check how well we did on the test data!
 test_res= model.predict(testimgs_res)
 test_res_binary = np.round(test_res)
