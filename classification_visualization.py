@@ -279,7 +279,6 @@ print(f"Whole-set MICE Score: {np.mean(MICE)}")
 
 
 #%% Form an ROC curve
-from sklearn.metrics import roc_curve, auc, precision_recall_curve, average_precision_score
 thresholds = np.linspace(0, 1, num=50)
 TPRs, FPRs, Pres = [], [], []
 # Loop thru the thresholds
@@ -355,6 +354,11 @@ ax2.set_xlabel('Recall (True Positive Rate)')
 ax2.set_ylabel('Precision')
 
 plt.show()
+
+#%%
+WP_true = np.array(WP_io_history)
+np.save('True_class.npy', WP_true)
+np.save('Coonfidence_class.npy',confidence_history)
 
 
 

@@ -237,8 +237,6 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     for layer in resnet_model.layers:
     	layer.trainable = False
     
-    
-   
     #Defining and training our classification NN: after passing through resnet50,
     #images are then passed through this network and classified. 
     trainimgs_res = get_bottleneck_features(resnet_model, trainimgs)
