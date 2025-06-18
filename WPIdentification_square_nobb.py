@@ -42,7 +42,15 @@ from sklearn.svm import SVC
 from sklearn.utils import class_weight
 #import cv2
 
+#may need to 'pip install optuna'
+import optuna
+import time
+import pandas as pd
+from tensorflow.keras import models
 
+#may need to 'pip install optuna-integration[tfkeras]'
+#from optuna.integration import TFKerasPruningCallback
+#doesn't work with optimizing for multiple objectives (val_accuracy and test_time in this case)
 #%% Function calls
 '''
 Function calls used throughout the script.
@@ -73,15 +81,15 @@ def progress_bar(iteration, total, prefix = '', suffix = '', decimals = 1, lengt
 
 # This function tells our feature extractor to do its thing
 def get_bottleneck_features(model, input_imgs):
-	'''
+    '''
     Retrives the ResNet50 feature vector
     INPUTS:  model:      resnet50 Keras model
              input_imgs: (N, 224, 224, 3) numpy array of (224, 224, 3) images to extract features from       
     OUTPUTS: featues:   (N, 100352) numpy array of extracted ResNet50 features
     '''
     print('Getting Feature Data From ResNet...')
-	features = model.predict(input_imgs, verbose = 1)
-	return features
+    features = model.predict(input_imgs, verbose = 1)
+    return features
 
 def img_preprocess(input_image):
     '''
@@ -105,7 +113,7 @@ def img_preprocess(input_image):
 print('Reading training data file')
 
 # Write File Name
-file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\ConeFlare_Shot64_re33_0deg\\training_data.txt'
+file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\merged_Langley_runs.txt"
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()
@@ -122,7 +130,7 @@ print('Begin writing training data to numpy array')
 WP_io = []
 #SM_bounds_Array = []
 Imagelist = []
-N_img, N_tot = 250, lines_len
+N_img, N_tot = 200, lines_len
 i_sample, img_count = 0, 0
 sampled_list = []
 
@@ -162,6 +170,10 @@ while (img_count < N_img) and (i_sample < N_tot):
     slice_width = 64
     height, width = full_image.shape
     num_slices = width // slice_width
+    
+    #chops off black box for longer uncropped images in run34 Langley
+    if full_image.shape == (64,1280):
+        num_slices = num_slices-1
     
     # Only convert bounds to int if not sm_check.startswith('X')
     if not sm_check.startswith('X'):
@@ -258,36 +270,126 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     class_weights_dict = dict(enumerate(class_weights))
     print("Class weights:", class_weights_dict)
     
-    # Added the classification layers
-    model = Sequential()
-    model.add(InputLayer(input_shape = (input_shape,)))
-    model.add(Dense(256,                                        # NN dimension            
-                    activation = 'relu',                        # Activation function at each node
-                    input_dim = input_shape,                    # Input controlled by feature vect from ResNet50
-                    kernel_regularizer=regularizers.L1L2(l1=1e-4, l2=1e-4),     # Regularization penality term
-                    bias_regularizer=regularizers.L2(1e-4)))                    # Additional regularization penalty term
-    
-    model.add(Dropout(0.5))     # Add dropout to make the system more robust
-    model.add(Dense(1, activation = 'sigmoid'))     # Add final classification layer
-    
-    # Compile the NN
-    model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-6), 
-                  loss = 'binary_crossentropy', 
-                  metrics = ['accuracy'])
+    def build_model(num_nodes,input_shape):
+        # Added the classification layers
+        model = Sequential()
+        model.add(InputLayer(input_shape = (input_shape,)))
+        model.add(Dense(num_nodes,                                        # NN dimension            
+                        activation = 'relu',                        # Activation function at each node
+                        input_dim = input_shape,                    # Input controlled by feature vect from ResNet50
+                        kernel_regularizer=regularizers.L1L2(l1=1e-4, l2=1e-4),     # Regularization penality term
+                        bias_regularizer=regularizers.L2(1e-4)))                    # Additional regularization penalty term
+        
+        model.add(Dropout(0.5))     # Add dropout to make the system more robust
+        model.add(Dense(1, activation = 'sigmoid'))     # Add final classification layer
+        
+        # Compile the NN
+        model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-6), 
+                      loss = 'binary_crossentropy', 
+                      metrics = ['accuracy'])
+        return model
     
     # Inspect the resulting model
-    model.summary()
+    # model.summary()
+    
+    early_stopping = tf.keras.callbacks.EarlyStopping(
+        monitor='val_accuracy',
+        min_delta=0,
+        patience=5,
+        verbose=1,
+        restore_best_weights=True,
+    )
     
     # Train the model! Takes about 20 sec/epoch
-    ne = 20
+    # ne = 20
     batch_size = 16
-    history = model.fit(trainimgs_res, trainlbs, 
-                        validation_split = 0.25, 
-                        epochs = ne, 
-                        verbose = 1,
-                        batch_size = batch_size,
-                        shuffle=True,
-                        class_weight = class_weights_dict)
+    
+    num_nodes = [32, 64, 128, 256]
+    
+    num_epochs = 40
+    def objective(trial):
+        #num_nodes = trial.suggest_categorical('num_nodes', [32, 64, 128, 256])
+        #num_epochs = trial.suggest_int('num_epochs', 5, 40)
+        num_nodes = [32, 64, 128, 256]
+        num_nodes = num_nodes[trial.number]
+    
+        model = build_model(num_nodes,input_shape)
+    
+        start_time = time.time()
+        history = model.fit(trainimgs_res, trainlbs, 
+                            validation_split = 0.25, 
+                            epochs = num_epochs, 
+                            verbose = 0,
+                            batch_size = batch_size,
+                            shuffle=True,
+                            class_weight = class_weights_dict,
+                            callbacks=[
+                            tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)]
+                            #callbacks=[early_stopping]
+                            )
+        train_time = time.time() - start_time
+    
+        val_accuracy = max(history.history['val_accuracy'])
+        val_accuracies = history.history['val_accuracy']
+        best_epoch = int(np.argmax(val_accuracies))+1  # Zero-indexed hence +1
+        best_val_accuracy = float(np.max(val_accuracies))    
+        
+        # Log for reference
+        trial.set_user_attr("train_time", train_time)
+        trial.set_user_attr("val_accuracy", val_accuracy)
+        trial.set_user_attr("best_epoch", best_epoch)
+        trial.set_user_attr("best_val_accuracy", best_val_accuracy)
+    
+        # Return multi-objective (neg accuracy because Optuna minimizes)
+        return -best_val_accuracy, train_time
+    
+   # Multi-objective study
+    study = optuna.create_study(
+        directions=["minimize", "minimize"],
+        study_name="keras_dense_tuning",
+        #pruner=optuna.pruners.MedianPruner()
+    )
+    study.optimize(objective, n_trials=4)
+    
+    # Save all results to DataFrame
+    results = []
+    for trial in study.trials:
+        results.append({
+            'trial_id': trial.number,
+            'num_nodes': num_nodes[trial.number], #trial.params.get(num_nodes)
+            'val_accuracy': trial.user_attrs.get('val_accuracy'),
+            'train_time': trial.user_attrs.get('train_time'),
+            'best_epoch': trial.user_attrs.get('best_epoch'),
+            'best_val_accuracy': trial.user_attrs.get('best_val_accuracy')
+            
+        })
+    
+    df_results = pd.DataFrame(results)
+    df_results.to_csv('C:\\Users\\tyler\\Desktop\\NSSSIP25\\optuna_results.csv', index=False)
+    print('Sorted based on val_accuracy')
+    print(df_results.sort_values("best_val_accuracy", ascending=False).head())
+    print('/n')
+    print('Sorted based on train_time')
+    print(df_results.sort_values("train_time", ascending=False).head())
+
+    
+    #show val_accuracy vs time trade off
+    # Scatter plot
+    plt.figure(figsize=(10, 6))
+    plt.scatter(df_results["train_time"], df_results["best_val_accuracy"], color='blue')
+    
+    # Label each point with its trial_id
+    for _, row in df_results.iterrows():
+        plt.text(row["train_time"] + 0.1, row["best_val_accuracy"], str(row["trial_id"]),
+                 fontsize=8, color='black')
+    
+    plt.xlabel("Training Time (s)")
+    plt.ylabel("Best Validation Accuracy")
+    plt.title("Pareto Front: Accuracy vs Time (labeled by trial_id)")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+    
     
     # Return the results!
     # On this model, we need to return the processed test images for validation 
@@ -455,5 +557,5 @@ print(f"True Pos: {n11}, True Neg: {n00}, False Pos: {n01}, False Neg: {n10}")
 
 
 #%% Save off the model, if desired
-model.save('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\ConeFlareRe33_normal.keras')
+#model.save('C:\\Users\\tyler\\Desktop\\NSSSIP25\\TrainedModels\\run38_with128nodes.keras')
 
