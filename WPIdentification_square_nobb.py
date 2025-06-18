@@ -385,7 +385,7 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     
     plt.xlabel("Training Time (s)")
     plt.ylabel("Best Validation Accuracy")
-    plt.title("Pareto Front: Accuracy vs Time (labeled by trial_id)")
+    plt.title("Accuracy vs Time (labeled by trial_id)")
     plt.grid(True)
     plt.tight_layout()
     plt.show()
