@@ -38,14 +38,14 @@ output = tf.keras.layers.Flatten()(output)
 resnet_model = Model(model1.input,output)
 
 # load the classifier
-model = keras.models.load_model('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\ConeFlareRe33_normal.keras')
+model = keras.models.load_model('C:\\Users\\tyler\\Desktop\\NSSSIP25\\TrainedModels\\Langley_200imgs_with32nodes.keras')
 
 
 #%% read in images
 print('Reading training data file')
 
 # Write File Name
-file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\ConeFlare_Shot64_re33_0deg\\training_data.txt'
+file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\merged_Langley_runs.txt"
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()
@@ -88,6 +88,10 @@ def image_splitting(i, lines):
     slice_width = 64
     height, width = full_image.shape
     num_slices = width // slice_width
+    
+    #chops off black box for longer uncropped images in run34 Langley
+    if full_image.shape == (64,1280):
+        num_slices = num_slices-1
     
     # Only convert bounds to int if not sm_check.startswith('X')
     if not sm_check.startswith('X'):
@@ -143,6 +147,8 @@ confidence_history = []
 plot_flag = 1       # View the images? MUCH SLOWER
 
 for i_iter in range(N_img):
+    plot_flag = 0  #i_iter%10
+    
     
     Imagelist, WP_io, slice_width, height, sm_bounds = image_splitting(i_iter, lines)
     
@@ -174,17 +180,18 @@ for i_iter in range(N_img):
                 n11 += 1
         
         # Add in the classification guess
-        if classification_result[i] == 1:
+        if classification_result[i] == 1 & plot_flag==1:
             rect = Rectangle((i*slice_width, 5), slice_width, height-10,
                                      linewidth=0.5, edgecolor='red', facecolor='none')
-            ax.add_patch(rect)
+            ax.add_patch(rect)  
             
-        # Adds a rectangle for the confidence of classification at every square
-        prob = confidence[i,0]
-        rect = Rectangle((i*slice_width, 5), slice_width, height-10,
-        linewidth=1.0*prob*prob, edgecolor='red', facecolor='none')
-        ax.add_patch(rect)
-        ax.text(i*slice_width, height+60,round(prob,2), fontsize = 7)
+        if plot_flag==1:
+            # Adds a rectangle for the confidence of classification at every square
+            prob = confidence[i,0]
+            rect = Rectangle((i*slice_width, 5), slice_width, height-10,
+            linewidth=1.0*prob*prob, edgecolor='red', facecolor='none')
+            ax.add_patch(rect)
+            ax.text(i*slice_width, height+70,round(prob,2), fontsize = 7)
             
             
     # Compute the inter-image accuracy
@@ -203,15 +210,17 @@ for i_iter in range(N_img):
     if plot_flag == 1:
         # Check if there's even a bounding box in the image
         if sm_bounds[0] == 'X':
-            ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN class')
+            ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN class - 32 nodes')
             plt.show()
+            #print(f'i_iter: {i_iter} - No WP')
             continue
         else:
             # Add the ground truth over the entire box
             ax.add_patch(Rectangle((sm_bounds[0],sm_bounds[1]), sm_bounds[2], sm_bounds[3], edgecolor='blue', facecolor='none'))
         
-            ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN class')
+            ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN class - 32 nodes')
             plt.show()
+            #print(f'i_iter: {i_iter} - WP')
 
 #%% Make history plot
 

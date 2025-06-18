@@ -304,13 +304,15 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     # ne = 20
     batch_size = 16
     
-    num_nodes = [32, 64, 128, 256]
+    #num_nodes = [32, 64, 128, 256]
+    num_nodes = [128]
     
     num_epochs = 40
     def objective(trial):
         #num_nodes = trial.suggest_categorical('num_nodes', [32, 64, 128, 256])
         #num_epochs = trial.suggest_int('num_epochs', 5, 40)
-        num_nodes = [32, 64, 128, 256]
+        #num_nodes = [32, 64, 128, 256]
+        num_nodes = [128]
         num_nodes = num_nodes[trial.number]
     
         model = build_model(num_nodes,input_shape)
@@ -334,6 +336,8 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
         best_epoch = int(np.argmax(val_accuracies))+1  # Zero-indexed hence +1
         best_val_accuracy = float(np.max(val_accuracies))    
         
+        model.save('C:\\Users\\tyler\\Desktop\\NSSSIP25\\TrainedModels\\Langley_200imgs_with128nodes.keras')
+        
         # Log for reference
         trial.set_user_attr("train_time", train_time)
         trial.set_user_attr("val_accuracy", val_accuracy)
@@ -349,7 +353,7 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
         study_name="keras_dense_tuning",
         #pruner=optuna.pruners.MedianPruner()
     )
-    study.optimize(objective, n_trials=4)
+    study.optimize(objective, n_trials=1)
     
     # Save all results to DataFrame
     results = []
@@ -394,8 +398,7 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     # Return the results!
     # On this model, we need to return the processed test images for validation 
     # in the later step
-    return history, model, testimgs_res, ne
-
+    return  model, testimgs_res #history, ne
 #%% Train the fine tuning model
 
 def feature_extractor_fine_tuning(trainimgs, trainlbs, testimgs):
@@ -557,5 +560,5 @@ print(f"True Pos: {n11}, True Neg: {n00}, False Pos: {n01}, False Neg: {n10}")
 
 
 #%% Save off the model, if desired
-#model.save('C:\\Users\\tyler\\Desktop\\NSSSIP25\\TrainedModels\\run38_with128nodes.keras')
+model.save('C:\\Users\\tyler\\Desktop\\NSSSIP25\\TrainedModels\\Langley_with32nodes.keras')
 
