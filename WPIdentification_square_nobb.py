@@ -96,7 +96,9 @@ def img_preprocess(image, label):
     image = tf.expand_dims(image, axis=-1) #change array shape for an image from [H,W] to [H,W,1] to conform to grayscale_to_rgb expectations
     image = tf.image.grayscale_to_rgb(image)
     image = tf.image.resize(image, [224, 224])
-    #image = tf.keras.applications.resnet50.preprocess_input(image) #preprocesses x for resnet50 #seemed to make everything orange???
+    image = tf.cast(image, tf.float32)
+    image = tf.keras.applications.resnet50.preprocess_input(image) #preprocesses x for resnet50 #seemed to make everything orange???
+    label = tf.cast(label, tf.float32)
     return image, label
 
 #putting this before instead of imbedding within the ML model allows it to run parallel on CPU instead of GPU 
@@ -132,7 +134,7 @@ print('Begin writing training data to numpy array')
 WP_io = []
 #SM_bounds_Array = []
 Imagelist = []
-N_img, N_tot = 50, lines_len
+N_img, N_tot = 10, lines_len
 i_sample, img_count = 0, 0
 sampled_list = []
 
@@ -162,7 +164,7 @@ while (img_count < N_img) and (i_sample < N_tot):
     image_data = list(map(float, parts[8:]))  # Convert image data to floats
 
     # Reshape the image data into the specified image size
-    full_image = np.array(image_data).astype(np.float64)
+    full_image = np.array(image_data).astype(np.float32) #changed from float64
     full_image = full_image.reshape(image_size)  # Reshape to (rows, columns)
     
     #if full_image.shape != (64, 1280):
@@ -226,11 +228,134 @@ Imagelist = np.array(Imagelist)
 WP_io = np.array(WP_io)
 print("Done inputting to np.array's")
 
+#%%fake troubleshooting data
+
+num_samples = 32
+image_shape = (64, 64)
+x = np.random.rand(num_samples, *image_shape).astype(np.float32)  # Already normalized
+y = np.random.randint(0, 2, size=(num_samples,)).astype(np.int32)
+
+
 #%% Create dataset - see https://www.youtube.com/watch?v=OqWbsbLhKws&list=WL
+'''
+# 2. Shuffle entire dataset before splitting
+# -------------------------------
+indices = np.random.permutation(len(Imagelist))
+images = Imagelist[indices]
+labels = WP_io[indices]
 
-dataset = tf.data.Dataset.from_tensor_slices((Imagelist, WP_io)) #can maybe combine data augmentation and preprocessing for (potentially) more efficiently and likely more simplicity
-#print(list(dataset.as_numpy_iterator())) #for troubleshooting/understanding
+# -------------------------------
+# 3. Split into train, val, test (60/20/20)
+# -------------------------------
+X_temp, X_test, y_temp, y_test = train_test_split(
+    images, labels, test_size=0.2, stratify=labels, random_state=42
+)
+X_train, X_val, y_train, y_val = train_test_split(
+    X_temp, y_temp, test_size=0.25, stratify=y_temp, random_state=42
+)
+# Now: 60% train, 20% val, 20% test
+'''
 
+classes = np.unique(y)
+
+class_weights = compute_class_weight(
+    class_weight='balanced',
+    classes=classes,
+    y=y)
+
+# Convert to dictionary format required by Keras
+class_weights_dict = dict(zip(classes, class_weights))
+print("Class weights:", class_weights_dict)
+
+# -------------------------------
+# 5. Create tf.data pipelines with .map()
+# -------------------------------
+def make_dataset(X, y, batch_size=16, shuffle=True):
+    ds = tf.data.Dataset.from_tensor_slices((X, y))
+    if shuffle:
+        ds = ds.shuffle(buffer_size=len(X))
+    ds = ds.map(img_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
+    ds = ds.batch(batch_size).prefetch(tf.data.AUTOTUNE)
+    return ds
+
+
+
+batch_size = 16
+ds = make_dataset(x,y,batch_size)
+'''
+train_ds = make_dataset(X_train, y_train, batch_size)
+val_ds = make_dataset(X_val, y_val, batch_size, shuffle=False)
+test_ds = make_dataset(X_test, y_test, batch_size, shuffle=False)
+'''
+print('Done making datasets')
+#%% Create model
+
+conv_base = ResNet50(weights="imagenet", 
+                     include_top=False,
+                     input_shape=(224,224,3))
+conv_base.trainable = False;
+
+model = tf.keras.Sequential([
+    conv_base,
+    tf.keras.layers.Flatten(), #.GlobalAveragePooling2D() could be more efficient and only marginally less accurate
+    tf.keras.layers.Dense(256, 
+                     activation='relu',
+                     kernel_regularizer=regularizers.L1L2(l1=1e-4, l2=1e-4),     # Regularization penality term
+                     bias_regularizer=regularizers.L2(1e-4)),  # Additional regularization penalty term
+    tf.keras.layers.Dropout(0.5),
+    tf.keras.layers.Dense(1, activation='sigmoid')
+    ])
+
+model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-6), #maybe increase to 1e-4 or even 1e-3
+              loss = 'binary_crossentropy', 
+              metrics = ['accuracy'])
+
+
+#early stopping code from Google search AI
+early_stopping = EarlyStopping(
+        monitor='val_accuracy',  # Metric to monitor (e.g., validation loss)
+        patience=5,        # Number of epochs with no improvement to wait
+        min_delta=0.001,    # Minimum change to be considered an improvement
+        restore_best_weights=True # Whether to restore the model weights to the best epoch
+    )
+    
+    # Train the model! Takes about 20 sec/epoch
+ne = 20
+batch_size = 16
+history = model.fit(ds, 
+                        #validation_data = val_ds, 
+                        epochs = ne, 
+                        verbose = 1,
+                        batch_size = batch_size,
+                        shuffle=True,
+                        class_weight = class_weights_dict
+                        #,callbacks=[early_stopping]
+                        )
+
+# -------------------------------
+# 8. Evaluate on test set
+# -------------------------------
+test_loss, test_acc = model.evaluate(test_ds)
+print(f"Test Accuracy: {test_acc:.4f}")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#%%old stuff
+'''
 batch_size = 16
 
 #dataset = dataset.shuffle(5) #ignore first # from bummer, then take the next available; higher buffer # is more random; ideal buffer is equal to the size of the dataset, but that can be unrealistically large
@@ -249,6 +374,7 @@ val_dataset = indexed_dataset.filter(lambda i, _: (i >= train_size) & (i < train
 test_dataset = indexed_dataset.filter(lambda i, _: i >= train_size + val_size)
 
 '''
+'''
 print(lines_len)
 print(length)
 print("Train:", sum(1 for _ in train_dataset))
@@ -256,6 +382,7 @@ print(train_size)
 print("Val:", sum(1 for _ in val_dataset))
 print(val_size)
 print("Test:", sum(1 for _ in test_dataset))
+'''
 '''
 
 # Remove index and preprocess
@@ -335,9 +462,10 @@ for x_batch, y_batch in train_dataset.take(1):
         plt.imshow(img)
         plt.axis('off')
         plt.show()
-
+'''
 
 #%%Train model
+'''
 
 ne = 5
 #batch_size = 16
@@ -352,7 +480,7 @@ history = model.fit(train_dataset,
                      class_weight = class_weights_dict
                      #,callbacks=[early_stopping]
                      )
-print('Done training model')
+print('Done training model')'''
 #%% Train the feature extractor model only
 '''
 def feature_extractor_training(train_dataset, test_dataset):
@@ -498,7 +626,7 @@ history, model, testimgs_res, ne = feature_extractor_training(train_dataset, tes
 print("Training Complete!")'''
 
 #%% Perform the visualization
-
+'''
 #Visualization: inspect how the training went
 
 #model.save('ClassifierV1m.h5')
@@ -523,7 +651,7 @@ pl2.set_ylabel('Loss')
 pl2.set_title('Classification Loss')
 leg2 = pl2.legend(loc = "best")
 plt.show()
-
+'''
 #%% Implement some statistics
 '''
 # Check how well we did on the test data!
