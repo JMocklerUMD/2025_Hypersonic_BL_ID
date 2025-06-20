@@ -81,16 +81,16 @@ def get_bottleneck_features(model, input_imgs):
 	features = model.predict(input_imgs, verbose = 1)
 	return features
 
-''' Old numpy array version of img_preprocess
-def img_preprocess(input_image, label):
+#Old numpy array version of img_preprocess
+def img_preprocess(input_image):
     input_image = np.stack((input_image,)*3,axis = -1)
     input_image = array_to_img(input_image)
     input_image = input_image.resize((224,224))
     input_image = img_to_array(input_image)
-    #input_image = (input_image / 127.5) - 1
-    return input_image, label
-'''
+    input_image = input_image / 255.0
+    return input_image
 
+'''
 #dataset version
 def img_preprocess(image, label):
     image = tf.expand_dims(image, axis=-1) #change array shape for an image from [H,W] to [H,W,1] to conform to grayscale_to_rgb expectations
@@ -98,8 +98,8 @@ def img_preprocess(image, label):
     image = tf.image.resize(image, [224, 224])
     #image = tf.cast(image, tf.float32)
     #image = tf.keras.applications.resnet50.preprocess_input(image) #preprocesses x for resnet50 #seemed to make everything orange???
-    #label = tf.cast(label, tf.float32)
-    return image, label
+    #label = tf.cast(label, tf.float32) #or int32
+    return image, label'''
 
 #putting this before instead of imbedding within the ML model allows it to run parallel on CPU instead of GPU 
 data_augmentation = keras.Sequential(
@@ -225,19 +225,20 @@ print('Done sampling images')
 # Imagelist,WP_io = Shuffler(Imagelist, WP_io)
 # Keras should shuffle our images for us - probably don't need to do!
 Imagelist = np.array(Imagelist)
+Imagelist = np.array([img_preprocess(img) for img in Imagelist])
 WP_io = np.array(WP_io)
 print("Done inputting to np.array's")
 
 #%%fake troubleshooting data
-
+'''
 num_samples = 32
 image_shape = (64, 64)
 x = np.random.rand(num_samples, *image_shape).astype(np.float32)  # Already normalized
 y = np.random.randint(0, 2, size=(num_samples,)).astype(np.int32)
 
-
-#%% Create dataset - see https://www.youtube.com/watch?v=OqWbsbLhKws&list=WL
 '''
+#%% Create dataset - see https://www.youtube.com/watch?v=OqWbsbLhKws&list=WL
+
 # 2. Shuffle entire dataset before splitting
 # -------------------------------
 indices = np.random.permutation(len(Imagelist))
@@ -254,14 +255,17 @@ X_train, X_val, y_train, y_val = train_test_split(
     X_temp, y_temp, test_size=0.25, stratify=y_temp, random_state=42
 )
 # Now: 60% train, 20% val, 20% test
-'''
 
-classes = np.unique(y)
+print(type(X_train), type(y_train))
+print(X_train.shape, y_train.shape)
+print(X_train.dtype, y_train.dtype)
+
+classes = np.unique(y_train)
 
 class_weights = compute_class_weight(
     class_weight='balanced',
     classes=classes,
-    y=y)
+    y=y_train)
 
 # Convert to dictionary format required by Keras
 class_weights_dict = dict(zip(classes, class_weights))
@@ -274,19 +278,31 @@ def make_dataset(X, y, batch_size=16, shuffle=True):
     ds = tf.data.Dataset.from_tensor_slices((X, y))
     if shuffle:
         ds = ds.shuffle(buffer_size=len(X))
-    ds = ds.map(img_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
+    #ds = ds.map(img_preprocess, num_parallel_calls=tf.data.AUTOTUNE)
     ds = ds.batch(batch_size).prefetch(tf.data.AUTOTUNE)
     return ds
 
 
 
 batch_size = 16
-ds = make_dataset(x,y,batch_size)
-'''
+#ds = make_dataset(x,y,batch_size)
+
 train_ds = make_dataset(X_train, y_train, batch_size)
 val_ds = make_dataset(X_val, y_val, batch_size, shuffle=False)
 test_ds = make_dataset(X_test, y_test, batch_size, shuffle=False)
-'''
+
+for image_batch, label_batch in train_ds.take(1):
+    image = image_batch[0]  # shape: (128, 128, 3)
+    plt.imshow(image.numpy())  # Convert tensor to NumPy for matplotlib
+    plt.title(f"Label: {label_batch.numpy()[0]}")
+    plt.axis("off")
+    plt.show()
+    
+for image, label in train_ds.take(1):
+    print("Image shape:", image.shape)
+    print("Image min/max:", tf.reduce_min(image), tf.reduce_max(image))
+    print("Label:", label)
+
 print('Done making datasets')
 #%% Create model
 
@@ -296,17 +312,24 @@ conv_base = ResNet50(weights="imagenet",
 conv_base.trainable = False;
 
 model = tf.keras.Sequential([
-    conv_base,
+    #conv_base,
+    
+    #test without conv_base
+    tf.keras.layers.Conv2D(16, 3, activation='relu', input_shape=(224, 224, 3)),
+    tf.keras.layers.MaxPooling2D(),
+
+    
     tf.keras.layers.Flatten(), #.GlobalAveragePooling2D() could be more efficient and only marginally less accurate
     tf.keras.layers.Dense(256, 
-                     activation='relu',
-                     kernel_regularizer=regularizers.L1L2(l1=1e-4, l2=1e-4),     # Regularization penality term
-                     bias_regularizer=regularizers.L2(1e-4)),  # Additional regularization penalty term
+                     activation='relu'
+                     #kernel_regularizer=regularizers.L1L2(l1=1e-4, l2=1e-4),     # Regularization penality term
+                     #bias_regularizer=regularizers.L2(1e-4)
+                     ),  # Additional regularization penalty term
     tf.keras.layers.Dropout(0.5),
     tf.keras.layers.Dense(1, activation='sigmoid')
     ])
 
-model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-6), #maybe increase to 1e-4 or even 1e-3
+model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-4), #was 1e-6 #maybe increase to 1e-4 or even 1e-3
               loss = 'binary_crossentropy', 
               metrics = ['accuracy'])
 
@@ -318,18 +341,23 @@ early_stopping = EarlyStopping(
         min_delta=0.001,    # Minimum change to be considered an improvement
         restore_best_weights=True # Whether to restore the model weights to the best epoch
     )
+
+#model.summary()
+
+single_batch = train_ds.take(1).repeat()
     
     # Train the model! Takes about 20 sec/epoch
 ne = 20
 batch_size = 16
-history = model.fit(ds, 
-                        #validation_data = val_ds, 
+history = model.fit(single_batch, 
+                        validation_data = val_ds, 
                         epochs = ne, 
                         verbose = 1,
-                        batch_size = batch_size,
+                        steps_per_epoch=10, #single_batch intential overfit troubleshooting
+                        #batch_size = batch_size,
                         shuffle=True,
-                        class_weight = class_weights_dict
-                        #,callbacks=[early_stopping]
+                        class_weight = class_weights_dict,
+                        callbacks=[early_stopping]
                         )
 
 # -------------------------------
@@ -339,19 +367,34 @@ test_loss, test_acc = model.evaluate(test_ds)
 print(f"Test Accuracy: {test_acc:.4f}")
 
 
+#%% Perform the visualization
 
+#Visualization: inspect how the training went
 
+rne = len(history.history['accuracy'])
 
-
-
-
-
-
-
-
-
-
-
+#model.save('ClassifierV1m.h5')
+epoch_list = list(range(1,rne + 1))
+# Making some plots to show our results
+f, (pl1, pl2) = plt.subplots(1, 2, figsize = (15,4), gridspec_kw = {'wspace': 0.3})
+t = f.suptitle('Neural Network Performance', fontsize = 14)
+# Accuracy Plot
+pl1.plot(epoch_list, history.history['accuracy'], label = 'train accuracy')
+pl1.plot(epoch_list, history.history['val_accuracy'], label = 'validation accuracy')
+pl1.set_xticks(np.arange(0, rne + 1, 5))
+pl1.set_xlabel('Epoch')
+pl1.set_ylabel('Accuracy')
+pl1.set_title('Accuracy')
+leg1 = pl1.legend(loc = "best")
+# Loss plot for classification
+pl2.plot(epoch_list, history.history['loss'], label = 'train loss')
+pl2.plot(epoch_list, history.history['val_loss'], label = 'validation loss')
+pl2.set_xticks(np.arange(0, rne + 1, 5)) 
+pl2.set_xlabel('Epoch')
+pl2.set_ylabel('Loss')
+pl2.set_title('Classification Loss')
+leg2 = pl2.legend(loc = "best")
+plt.show()
 
 
 #%%old stuff
