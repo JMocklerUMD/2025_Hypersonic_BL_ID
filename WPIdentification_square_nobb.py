@@ -96,9 +96,9 @@ def img_preprocess(image, label):
     image = tf.expand_dims(image, axis=-1) #change array shape for an image from [H,W] to [H,W,1] to conform to grayscale_to_rgb expectations
     image = tf.image.grayscale_to_rgb(image)
     image = tf.image.resize(image, [224, 224])
-    image = tf.cast(image, tf.float32)
-    image = tf.keras.applications.resnet50.preprocess_input(image) #preprocesses x for resnet50 #seemed to make everything orange???
-    label = tf.cast(label, tf.float32)
+    #image = tf.cast(image, tf.float32)
+    #image = tf.keras.applications.resnet50.preprocess_input(image) #preprocesses x for resnet50 #seemed to make everything orange???
+    #label = tf.cast(label, tf.float32)
     return image, label
 
 #putting this before instead of imbedding within the ML model allows it to run parallel on CPU instead of GPU 
