@@ -90,6 +90,12 @@ def img_preprocess(input_image):
     input_image = input_image / 255.0
     return input_image
 
+def trouble_preprocess(image, label):
+    image = tf.cast(image, tf.float32)
+    label = tf.cast(label, tf.float32)
+    label = tf.reshape(label, [])               # ensure scalar
+    return image, label
+
 '''
 #dataset version
 def img_preprocess(image, label):
@@ -134,7 +140,7 @@ print('Begin writing training data to numpy array')
 WP_io = []
 #SM_bounds_Array = []
 Imagelist = []
-N_img, N_tot = 10, lines_len
+N_img, N_tot = 100, lines_len
 i_sample, img_count = 0, 0
 sampled_list = []
 
@@ -297,11 +303,13 @@ for image_batch, label_batch in train_ds.take(1):
     plt.title(f"Label: {label_batch.numpy()[0]}")
     plt.axis("off")
     plt.show()
-    
+
+'''
 for image, label in train_ds.take(1):
     print("Image shape:", image.shape)
     print("Image min/max:", tf.reduce_min(image), tf.reduce_max(image))
     print("Label:", label)
+'''
 
 print('Done making datasets')
 #%% Create model
@@ -312,11 +320,11 @@ conv_base = ResNet50(weights="imagenet",
 conv_base.trainable = False;
 
 model = tf.keras.Sequential([
-    #conv_base,
+    conv_base,
     
     #test without conv_base
-    tf.keras.layers.Conv2D(16, 3, activation='relu', input_shape=(224, 224, 3)),
-    tf.keras.layers.MaxPooling2D(),
+    #tf.keras.layers.Conv2D(16, 3, activation='relu', input_shape=(224, 224, 3)),
+    #tf.keras.layers.MaxPooling2D(),
 
     
     tf.keras.layers.Flatten(), #.GlobalAveragePooling2D() could be more efficient and only marginally less accurate
@@ -344,16 +352,33 @@ early_stopping = EarlyStopping(
 
 #model.summary()
 
-single_batch = train_ds.take(1).repeat()
+print('P')
+for images, labels in train_ds.take(1):
+    # images shape: (batch_size, height, width, channels)
+    # labels shape: (batch_size,)
+    batch_size = images.shape[0]
+    
+    plt.figure(figsize=(15, 5))
+    for i in range(min(batch_size, 8)):  # show up to _ images
+        plt.subplot(1, 8, i + 1)
+        img = images[i].numpy()
+        # If images are normalized [0,1], no need to rescale
+        plt.imshow(img.astype("uint8") if img.dtype== 'uint8' else img)
+        plt.title(f"Label: {labels[i].numpy()}")
+        plt.axis('off')
+    plt.show()
+    break  # Only do one batch
+
+#single_batch = train_ds.take(1).repeat()
     
     # Train the model! Takes about 20 sec/epoch
 ne = 20
 batch_size = 16
-history = model.fit(single_batch, 
+history = model.fit(train_ds, 
                         validation_data = val_ds, 
                         epochs = ne, 
                         verbose = 1,
-                        steps_per_epoch=10, #single_batch intential overfit troubleshooting
+                        #steps_per_epoch=10, #single_batch intential overfit troubleshooting
                         #batch_size = batch_size,
                         shuffle=True,
                         class_weight = class_weights_dict,
