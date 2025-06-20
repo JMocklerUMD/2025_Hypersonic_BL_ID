@@ -79,7 +79,7 @@ def get_bottleneck_features(model, input_imgs):
              input_imgs: (N, 224, 224, 3) numpy array of (224, 224, 3) images to extract features from       
     OUTPUTS: featues:   (N, 100352) numpy array of extracted ResNet50 features
     '''
-    print('Getting Feature Data From ResNet...')
+	print('Getting Feature Data From ResNet...')
 	features = model.predict(input_imgs, verbose = 1)
 	return features
 
