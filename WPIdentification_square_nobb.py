@@ -45,9 +45,9 @@ from sklearn.utils import class_weight
 #%% Define slice_width based on multiple of wavelength
 
 bound_height = 16 #height of boundary layer in pixels - 16 for run33 in this case
-num_wavelengths = 1.5 #number of wavelengths in each slice
+num_wavelengths = 10 #number of wavelengths in each slice
 
-slice_width = 2*bound_height * num_wavelengths 
+slice_width = int(2*bound_height * num_wavelengths)
 print(f'slice_width = {slice_width}')
 #left over parts of the image at the end are just discarded
 
@@ -188,7 +188,7 @@ while (img_count < N_img) and (i_sample < N_tot):
         x_max = x_min + box_width
         y_max = y_min + box_height
     
-    for i in range(math.floor(num_slices)):
+    for i in range(num_slices):
         x_start = i * slice_width
         x_end = (i + 1) * slice_width
     
