@@ -42,6 +42,14 @@ from sklearn.svm import SVC
 from sklearn.utils import class_weight
 #import cv2
 
+#%% Define slice_width based on multiple of wavelength
+
+bound_height = 16 #height of boundary layer in pixels - 16 for run33 in this case
+num_wavelengths = 1.5 #number of wavelengths in each slice
+
+slice_width = 2*bound_height * num_wavelengths 
+print(f'slice_width = {slice_width}')
+#left over parts of the image at the end are just discarded
 
 #%% Function calls
 '''
@@ -105,7 +113,7 @@ def img_preprocess(input_image):
 print('Reading training data file')
 
 # Write File Name
-file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\ConeFlare_Shot64_re33_0deg\\training_data.txt'
+file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\wavepacket_labels_combined.txt"
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()
@@ -122,9 +130,10 @@ print('Begin writing training data to numpy array')
 WP_io = []
 #SM_bounds_Array = []
 Imagelist = []
-N_img, N_tot = 250, lines_len
+N_img, N_tot = 200, lines_len
 i_sample, img_count = 0, 0
 sampled_list = []
+discard_history = []
 
 # Break when we aquire 100 images or when we run thru the 1000 frames
 while (img_count < N_img) and (i_sample < N_tot):
@@ -159,9 +168,18 @@ while (img_count < N_img) and (i_sample < N_tot):
     #    print(f"Skipping image at line {i_sample+1} — unexpected size {full_image.shape}")
     #    continue
     
-    slice_width = 64
+    #added to account for uncropped Langley run 34
+    if full_image.shape == (64,1280):
+        width = 1216
+
+    #base slice_width on multiple on wavelength
     height, width = full_image.shape
     num_slices = width // slice_width
+    
+    discarded_length = width - (num_slices * slice_width)
+
+    discard_history.append(discarded_length)
+    #print(f'Discarded image {img_count} length = {discarded_length} pixels    Width  = {width}')
     
     # Only convert bounds to int if not sm_check.startswith('X')
     if not sm_check.startswith('X'):
@@ -170,7 +188,7 @@ while (img_count < N_img) and (i_sample < N_tot):
         x_max = x_min + box_width
         y_max = y_min + box_height
     
-    for i in range(num_slices-1):
+    for i in range(math.floor(num_slices)):
         x_start = i * slice_width
         x_end = (i + 1) * slice_width
     
@@ -196,6 +214,25 @@ while (img_count < N_img) and (i_sample < N_tot):
     
     # Inspect what images were selected later
     sampled_list.append(i_sample)
+    
+'''
+print('while (img_count < N_img) and (i_sample < N_tot):')
+print(f'img_count = {img_count}')
+print(f'N_img = {N_img}')
+print(f'i_sample = {i_sample}')
+print(f'N_tot = {N_tot}')
+'''
+    
+plt.plot(list(range(img_count)), discard_history)
+plt.ylabel('Pixels Discarded')
+plt.xlabel('Image')
+plt.yticks(np.arange(0, max(discard_history) + 1, 4))
+plt.title('Discarded Pixels at the End of Images')
+plt.show()
+
+avg_discarded = sum(discard_history)/len(discard_history)
+
+print(f'Average discarded length = {avg_discarded} pixels')
 
 print('Done sampling images!')
 
