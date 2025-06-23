@@ -73,15 +73,15 @@ def progress_bar(iteration, total, prefix = '', suffix = '', decimals = 1, lengt
 
 # This function tells our feature extractor to do its thing
 def get_bottleneck_features(model, input_imgs):
-	'''
+    '''
     Retrives the ResNet50 feature vector
     INPUTS:  model:      resnet50 Keras model
              input_imgs: (N, 224, 224, 3) numpy array of (224, 224, 3) images to extract features from       
     OUTPUTS: featues:   (N, 100352) numpy array of extracted ResNet50 features
     '''
     print('Getting Feature Data From ResNet...')
-	features = model.predict(input_imgs, verbose = 1)
-	return features
+    features = model.predict(input_imgs, verbose = 1)
+    return features
 
 def img_preprocess(input_image):
     '''
@@ -97,118 +97,134 @@ def img_preprocess(input_image):
     return processed_image
 
 
-#%% Read training data file
-# PREPROCESSING: the following block of codes accept the image data from a 
-# big text file, parse them out, then process them into an array
-# that can be passed to the keras NN trainer
-
-print('Reading training data file')
-
-# Write File Name
-file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\ConeFlare_Shot64_re33_0deg\\training_data.txt'
-if os.path.exists(file_name):
-    with open(file_name, 'r') as file:
-        lines = file.readlines()
-else:
-    raise ValueError("No training_data file detected")
-
-lines_len = len(lines)
-print(f"{lines_len} lines read")
-
-
 #%% Write training data to required arrays and visualize
-print('Begin writing training data to numpy array')
 
-WP_io = []
-#SM_bounds_Array = []
-Imagelist = []
-N_img, N_tot = 250, lines_len
-i_sample, img_count = 0, 0
-sampled_list = []
 
-# Break when we aquire 100 images or when we run thru the 1000 frames
-while (img_count < N_img) and (i_sample < N_tot):
+
+def write_data(file_name, N_img):
+    '''
+    Pass in file_name and N_img
+    Reads and splits to arrays
+    Splits to train and test
+    Outputs train images, train labels, test images, test labels, and lines_len
+    '''
     
-    # Randomly sample image with probability N_img/N_tot
-    # Skip image if in the 1-N_img/N_tot probability
-    if np.random.random_sample(1)[0] < (1-N_img/N_tot):
-        i_sample = i_sample + 1
-        continue
-    
-    # Otherwise, we accept the image and continue with the processing
-    curr_line = i_sample;
-    line = lines[curr_line]
+    # Read training data file
+    # PREPROCESSING: the following block of codes accept the image data from a 
+    # big text file, parse them out, then process them into an array
+    # that can be passed to the keras NN trainer
 
-    parts = line.strip().split()
+    print('Reading training data file')
 
-    run = parts[0]
-    image_response = parts[1]
-    sm_check = parts[2]
-    if sm_check.startswith('X'):
-    	sm_bounds = list(map(str, parts[2:6]))  # Convert bounds to integers
+    # Write File Name
+    if os.path.exists(file_name):
+        with open(file_name, 'r') as file:
+            lines = file.readlines()
     else:
-    	sm_bounds = list(map(int, parts[2:6]))
-    image_size = list(map(int, parts[6:8]))  # Convert image size to integers
-    image_data = list(map(float, parts[8:]))  # Convert image data to floats
+        raise ValueError("No training_data file detected")
 
-    # Reshape the image data into the specified image size
-    full_image = np.array(image_data).astype(np.float64)
-    full_image = full_image.reshape(image_size)  # Reshape to (rows, columns)
+    lines_len = len(lines)
+    print(f"{lines_len} lines read")
     
-    #if full_image.shape != (64, 1280):
-    #    print(f"Skipping image at line {i_sample+1} — unexpected size {full_image.shape}")
-    #    continue
+    print('Begin writing training data to numpy array')
     
-    slice_width = 64
-    height, width = full_image.shape
-    num_slices = width // slice_width
+    WP_io = []
+    #SM_bounds_Array = []
+    Imagelist = []
+    N_tot = lines_len
+    print(f'N_img = {N_img}')
+    i_sample, img_count = 0, 0
+    sampled_list = []
     
-    # Only convert bounds to int if not sm_check.startswith('X')
-    if not sm_check.startswith('X'):
-        sm_bounds = list(map(int, sm_bounds))
-        x_min, y_min, box_width, box_height = sm_bounds
-        x_max = x_min + box_width
-        y_max = y_min + box_height
+    # Break when we aquire 100 images or when we run thru the 1000 frames
+    while (img_count < N_img) and (i_sample < N_tot):
+        
+        # Randomly sample image with probability N_img/N_tot
+        # Skip image if in the 1-N_img/N_tot probability
+        if np.random.random_sample(1)[0] < (1-N_img/N_tot):
+            i_sample = i_sample + 1
+            continue
+        
+        # Otherwise, we accept the image and continue with the processing
+        curr_line = i_sample;
+        line = lines[curr_line]
     
-    for i in range(num_slices-1):
-        x_start = i * slice_width
-        x_end = (i + 1) * slice_width
+        parts = line.strip().split()
     
-        # Slice the image
-        image = full_image[:, x_start:x_end]
-        image_size = image.shape
-        Imagelist.append(image)
-    
+        run = parts[0]
+        image_response = parts[1]
+        sm_check = parts[2]
         if sm_check.startswith('X'):
-            WP_io.append(0)
-
+        	sm_bounds = list(map(str, parts[2:6]))  # Convert bounds to integers
         else:
-            # Check for horizontal overlap with this slice
-            if x_max >= x_start+slice_width/4 and x_min <= x_end-slice_width/4:
-                WP_io.append(1)
-
-            else:
+        	sm_bounds = list(map(int, parts[2:6]))
+        image_size = list(map(int, parts[6:8]))  # Convert image size to integers
+        image_data = list(map(float, parts[8:]))  # Convert image data to floats
+    
+        # Reshape the image data into the specified image size
+        full_image = np.array(image_data).astype(np.float64)
+        full_image = full_image.reshape(image_size)  # Reshape to (rows, columns)
+        
+        #if full_image.shape != (64, 1280):
+        #    print(f"Skipping image at line {i_sample+1} — unexpected size {full_image.shape}")
+        #    continue
+        
+        slice_width = 64
+        print(f'slice_width = {slice_width}')
+        height, width = full_image.shape
+        num_slices = width // slice_width
+        
+        # Only convert bounds to int if not sm_check.startswith('X')
+        if not sm_check.startswith('X'):
+            sm_bounds = list(map(int, sm_bounds))
+            x_min, y_min, box_width, box_height = sm_bounds
+            x_max = x_min + box_width
+            y_max = y_min + box_height
+        
+        for i in range(num_slices-1):
+            x_start = i * slice_width
+            x_end = (i + 1) * slice_width
+        
+            # Slice the image
+            image = full_image[:, x_start:x_end]
+            image_size = image.shape
+            Imagelist.append(image)
+        
+            if sm_check.startswith('X'):
                 WP_io.append(0)
     
-    # Increment to the next sample image and image count
-    i_sample = i_sample + 1
-    img_count = img_count + 1
+            else:
+                # Check for horizontal overlap with this slice
+                if x_max >= x_start+slice_width/4 and x_min <= x_end-slice_width/4:
+                    WP_io.append(1)
     
-    # Inspect what images were selected later
-    sampled_list.append(i_sample)
-
-print('Done sampling images!')
-
-
-#%% Resizes the arrays
-Imagelist = np.array(Imagelist)
-WP_io = np.array(WP_io)
-Imagelist_resized = np.array([img_preprocess(img) for img in Imagelist])
-print("Done Resizing")
+                else:
+                    WP_io.append(0)
+        
+        # Increment to the next sample image and image count
+        i_sample = i_sample + 1
+        img_count = img_count + 1
+        
+        # Inspect what images were selected later
+        sampled_list.append(i_sample)
+    
+    print('Done sampling images!')
+    
+    # Resizes the arrays
+    Imagelist = np.array(Imagelist)
+    WP_io = np.array(WP_io)
+    Imagelist_resized = np.array([img_preprocess(img) for img in Imagelist])
+    print("Done Resizing")
+    
+    trainimgs, testimgs, trainlbs, testlbls = train_test_split(Imagelist_resized,WP_io, test_size=0.2, random_state=69)
+    
+    print("Done Splitting")
+    
+    return trainimgs, testimgs, trainlbs, testlbls, lines_len
 
 #%% Split the test and train images
-trainimgs, testimgs, trainlbs, testlbls = train_test_split(Imagelist_resized,WP_io, test_size=0.2, random_state=69)
-print("Done Splitting")
+trainimgs, testimgs, trainlbs, testlbls, lines_len = write_data("C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\Test1\\run33\\turbulence_training_data.txt", 200)
+trainimgs_turb, testimgs_turb, trainlbs_turb, testlbls_turb, lines_len_turb = write_data("C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\wavepacket_labels_combined.txt", 200)
 
 #%% Train the feature extractor model only
 
@@ -352,7 +368,10 @@ def feature_extractor_fine_tuning(trainimgs, trainlbs, testimgs):
 #%% Call fcn to train the model!
 history, model, testimgs_res, ne = feature_extractor_training(trainimgs, trainlbs, testimgs)
 #history, model, testimgs_res, ne = feature_extractor_fine_tuning(trainimgs, trainlbs, testimgs)
-print("Training Complete!")
+print("Second-mode Wave Model Training Complete!")
+
+history_turb, model_turb, testimgs_res_turb, ne_turb = feature_extractor_training(trainimgs_turb, trainlbs_turb, testimgs_turb)
+print("Turbulence Model Training Complete!")
 
 #%% Perform the visualization
 '''
@@ -362,7 +381,7 @@ Visualization: inspect how the training went
 epoch_list = list(range(1,ne + 1))
 # Making some plots to show our results
 f, (pl1, pl2) = plt.subplots(1, 2, figsize = (15,4), gridspec_kw = {'wspace': 0.3})
-t = f.suptitle('Neural Network Performance', fontsize = 14)
+t = f.suptitle('Neural Network Performance: Second-mode Waves', fontsize = 14)
 # Accuracy Plot
 pl1.plot(epoch_list, history.history['accuracy'], label = 'train accuracy')
 pl1.plot(epoch_list, history.history['val_accuracy'], label = 'validation accuracy')
