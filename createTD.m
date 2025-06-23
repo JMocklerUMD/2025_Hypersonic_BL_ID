@@ -2,7 +2,7 @@
 
 %% Read in and Process Images
 
-folder_path = 'C:\UMD GRADUATE\RESEARCH\Hypersonic Image ID\videos\Test1\ConeFlare_Shot64_re33_0deg';
+folder_path = 'C:\Users\tyler\Desktop\NSSSIP25\CROPPEDrun33\Test1\run33';
 
 % read in files in folder
 images = dir(fullfile(folder_path, '*.tif'));
@@ -38,7 +38,7 @@ end
 
 %% Manually train data 
 
-save_file = fullfile(folder_path, 'partial_results.mat');
+save_file = fullfile(folder_path, 'turbulence_partial_results.mat');
 
 run = 4120; %change to run number
 
@@ -64,7 +64,7 @@ while i <= length(images)
     t = title(['Frame ' num2str(i)]);
     t.Color = 'white';
     
-    wp = input('Wave packet? (0 = no, 1 = yes, 2 = relabel previous, 3 = throw away, 4 = exit): ');
+    wp = input('Turbulence? (0 = no, 1 = yes, 2 = relabel previous, 3 = throw away, 4 = exit): ');
     
     % throwaway
     if wp == 3
@@ -88,7 +88,7 @@ while i <= length(images)
 
     % there is a wavepacket! draw a bounding box
     elseif wp == 1
-        disp('Draw bounding box around the wave packet.');
+        disp('Draw bounding box around the turbulence.');
         bb = drawrectangle(); 
         bbox = bb.Position; % [x y width height]
         results{i,3} = bbox(1);
@@ -123,11 +123,11 @@ end
 
 %% Write trained data to .txt file
 
-output_file = fullfile(folder_path, 'training_data.txt');
+output_file = fullfile(folder_path, 'turbulence_training_data.txt');
 fileID = fopen(output_file, 'w');
 
 % only perform if all images are labeled
-if i == length(images) + 1 % remove if statement if training stopped early and run section
+if i == length(images) + 1% remove if statement if training stopped early and run section
     for k = 1:length(images)
 
         % do not record throwaway images
