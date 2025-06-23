@@ -43,7 +43,7 @@ import time
 #%% Define slice_width based on multiple of wavelength
 
 bound_height = 16 #height of boundary layer in pixels - 16 for run33 in this case
-num_wavelengths = 2 #number of wavelengths in each slice
+num_wavelengths = 10 #number of wavelengths in each slice
 
 slice_width = int(2*bound_height * num_wavelengths)
 print(f'slice_width = {slice_width}')
@@ -1145,7 +1145,7 @@ print(f"Whole-set False Negative rate: {np.mean(FN_history_post)/Nframe_per_img}
 
 print("------------Whole-set Test Results------------")
 print("                   Non-processed         Post-processed         Difference")
-print(f"Avg. Accuracy:         {round(np.mean(acc_history)/Nframe_per_img,3)}               {round(np.mean(acc_history_post)/Nframe_per_img,3)}          {-round(np.mean(acc_history)/Nframe_per_img-np.mean(acc_history_post)/Nframe_per_img,3)}")
+print(f"Avg. Accuracy:         {round(np.mean(acc_history),3)}               {round(np.mean(acc_history_post),3)}          {-round(np.mean(acc_history)-np.mean(acc_history_post),3)}")
 print(f"True Positive:         {round(np.mean(TP_history)/Nframe_per_img,3)}               {round(np.mean(TP_history_post)/Nframe_per_img,3)}          {-round(np.mean(TP_history)/Nframe_per_img-np.mean(TP_history_post)/Nframe_per_img,3)}")
 print(f"True Negative:         {round(np.mean(TN_history)/Nframe_per_img,3)}               {round(np.mean(TN_history_post)/Nframe_per_img,3)}          {-round(np.mean(TN_history)/Nframe_per_img-np.mean(TN_history_post)/Nframe_per_img,3)}")
 print(f"False Positive:        {round(np.mean(FP_history)/Nframe_per_img,3)}               {round(np.mean(FP_history_post)/Nframe_per_img,3)}          {-round(np.mean(FP_history)/Nframe_per_img-np.mean(FP_history_post)/Nframe_per_img,3)}")
