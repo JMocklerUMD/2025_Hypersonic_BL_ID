@@ -377,99 +377,104 @@ print("Turbulence Model Training Complete!")
 '''
 Visualization: inspect how the training went
 '''
-#model.save('ClassifierV1m.h5')
-epoch_list = list(range(1,ne + 1))
-# Making some plots to show our results
-f, (pl1, pl2) = plt.subplots(1, 2, figsize = (15,4), gridspec_kw = {'wspace': 0.3})
-t = f.suptitle('Neural Network Performance: Second-mode Waves', fontsize = 14)
-# Accuracy Plot
-pl1.plot(epoch_list, history.history['accuracy'], label = 'train accuracy')
-pl1.plot(epoch_list, history.history['val_accuracy'], label = 'validation accuracy')
-pl1.set_xticks(np.arange(0, ne + 1, 5))
-pl1.set_xlabel('Epoch')
-pl1.set_ylabel('Accuracy')
-pl1.set_title('Accuracy')
-leg1 = pl1.legend(loc = "best")
-# Loss plot for classification
-pl2.plot(epoch_list, history.history['loss'], label = 'train loss')
-pl2.plot(epoch_list, history.history['val_loss'], label = 'validation loss')
-pl2.set_xticks(np.arange(0, ne + 1, 5)) 
-pl2.set_xlabel('Epoch')
-pl2.set_ylabel('Loss')
-pl2.set_title('Classification Loss')
-leg2 = pl2.legend(loc = "best")
-plt.show()
-
-#%% Implement some statistics
-
-# Check how well we did on the test data!
-test_res= model.predict(testimgs_res)
-test_res_binary = np.round(test_res)
-
-# build out the components of a confusion matrix
-n00, n01, n10, n11 = 0, 0, 0, 0 
-
-for i, label_true in enumerate(testlbls):
-    label_pred = test_res_binary[i]
+def stats(ne,history,name):
+    print('Stats for {name}:')
+    #model.save('ClassifierV1m.h5')
+    epoch_list = list(range(1,ne + 1))
+    # Making some plots to show our results
+    f, (pl1, pl2) = plt.subplots(1, 2, figsize = (15,4), gridspec_kw = {'wspace': 0.3})
+    t = f.suptitle('Neural Network Performance: {name}', fontsize = 14)
+    # Accuracy Plot
+    pl1.plot(epoch_list, history.history['accuracy'], label = 'train accuracy')
+    pl1.plot(epoch_list, history.history['val_accuracy'], label = 'validation accuracy')
+    pl1.set_xticks(np.arange(0, ne + 1, 5))
+    pl1.set_xlabel('Epoch')
+    pl1.set_ylabel('Accuracy')
+    pl1.set_title('Accuracy')
+    leg1 = pl1.legend(loc = "best")
+    # Loss plot for classification
+    pl2.plot(epoch_list, history.history['loss'], label = 'train loss')
+    pl2.plot(epoch_list, history.history['val_loss'], label = 'validation loss')
+    pl2.set_xticks(np.arange(0, ne + 1, 5)) 
+    pl2.set_xlabel('Epoch')
+    pl2.set_ylabel('Loss')
+    pl2.set_title('Classification Loss')
+    leg2 = pl2.legend(loc = "best")
+    plt.show()
     
-    if label_true == 0:
-        if label_pred == 0:
-            n00 += 1
-        if label_pred == 1:
-            n01 += 1 
-    elif label_true == 1:
-        if label_pred == 0:
-            n10 += 1
-        if label_pred == 1:
-            n11 += 1
-       
-n0 = n00 + n01
-n1 = n10 + n11
-
-# Compute accuracy, sensitivity, specificity, 
-# positive prec, and neg prec
-# As defined in:
-    # Introducing Image Classification Efficacies, Shao et al 2021
-    # or https://arxiv.org/html/2406.05068v1
-    # or https://neptune.ai/blog/evaluation-metrics-binary-classification
+    # Implement some statistics
     
-TP = n11
-TN = n00
-FP = n01
-FN = n10
+    # Check how well we did on the test data!
+    test_res= model.predict(testimgs_res)
+    test_res_binary = np.round(test_res)
     
-acc = (n00 + n11) / len(testlbls) # complete accuracy
-Se = n11 / n1 # true positive success rate, recall
-Sp = n00 / n0 # true negative success rate
-Pp = n11 / (n11 + n01) # correct positive cases over all pred positive
-Np = n00 / (n00 + n10) # correct negative cases over all pred negative
-Recall = TP/(TP+FN) # Probability of detection
-FRP = FP/(FP+TN) # False positive, probability of a false alarm
-
-# Rate comapared to guessing
-# MICE -> 1: perfect classification. -> 0: just guessing
-A0 = (n0/len(testlbls))**2 + (n1/len(testlbls))**2
-MICE = (acc - A0)/(1-A0)   
-
-#%% Print out the summary statistics
-ntot = len(testlbls)
-print("------------Test Results------------")
-print("            Predicted Class         ")
-print("True Class     0        1    Totals ")
-print(f"     0        {n00}       {n01}    {n0}")
-print(f"     1        {n10}        {n11}    {n1}")
-print("")
-print("            Predicted Class         ")
-print("True Class     0        1    Totals ")
-print(f"     0        {n00/ntot}      {n01/ntot}    {n0}")
-print(f"     1        {n10/ntot}      {n11/ntot}    {n1}")
-print("")
-print(f"Model Accuracy: {acc}, Sensitivity: {Se}, Specificity: {Sp}")
-print(f"Precision: {Pp},  Recall: {Recall}, False Pos Rate: {FRP}")
-print(f"MICE (0->guessing, 1->perfect classification): {MICE}")
-print("")
-print(f"True Pos: {n11}, True Neg: {n00}, False Pos: {n01}, False Neg: {n10}")
-
+    # build out the components of a confusion matrix
+    n00, n01, n10, n11 = 0, 0, 0, 0 
+    
+    for i, label_true in enumerate(testlbls):
+        label_pred = test_res_binary[i]
+        
+        if label_true == 0:
+            if label_pred == 0:
+                n00 += 1
+            if label_pred == 1:
+                n01 += 1 
+        elif label_true == 1:
+            if label_pred == 0:
+                n10 += 1
+            if label_pred == 1:
+                n11 += 1
+           
+    n0 = n00 + n01
+    n1 = n10 + n11
+    
+    # Compute accuracy, sensitivity, specificity, 
+    # positive prec, and neg prec
+    # As defined in:
+        # Introducing Image Classification Efficacies, Shao et al 2021
+        # or https://arxiv.org/html/2406.05068v1
+        # or https://neptune.ai/blog/evaluation-metrics-binary-classification
+        
+    TP = n11
+    TN = n00
+    FP = n01
+    FN = n10
+        
+    acc = (n00 + n11) / len(testlbls) # complete accuracy
+    Se = n11 / n1 # true positive success rate, recall
+    Sp = n00 / n0 # true negative success rate
+    Pp = n11 / (n11 + n01) # correct positive cases over all pred positive
+    Np = n00 / (n00 + n10) # correct negative cases over all pred negative
+    Recall = TP/(TP+FN) # Probability of detection
+    FRP = FP/(FP+TN) # False positive, probability of a false alarm
+    
+    # Rate comapared to guessing
+    # MICE -> 1: perfect classification. -> 0: just guessing
+    A0 = (n0/len(testlbls))**2 + (n1/len(testlbls))**2
+    MICE = (acc - A0)/(1-A0)   
+    
+    # Print out the summary statistics
+    ntot = len(testlbls)
+    print("------------Test Results------------")
+    print("            Predicted Class         ")
+    print("True Class     0        1    Totals ")
+    print(f"     0        {n00}       {n01}    {n0}")
+    print(f"     1        {n10}        {n11}    {n1}")
+    print("")
+    print("            Predicted Class         ")
+    print("True Class     0        1    Totals ")
+    print(f"     0        {n00/ntot}      {n01/ntot}    {n0}")
+    print(f"     1        {n10/ntot}      {n11/ntot}    {n1}")
+    print("")
+    print(f"Model Accuracy: {acc}, Sensitivity: {Se}, Specificity: {Sp}")
+    print(f"Precision: {Pp},  Recall: {Recall}, False Pos Rate: {FRP}")
+    print(f"MICE (0->guessing, 1->perfect classification): {MICE}")
+    print("")
+    print(f"True Pos: {n11}, True Neg: {n00}, False Pos: {n01}, False Neg: {n10}")
+    
+#%% Show results
+stats(ne,history,'Second-mode')
+stats(ne_turb,history_turb,'Turbulence')
 
 #%% Save off the model, if desired
 model.save('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\ConeFlareRe33_normal.keras')
