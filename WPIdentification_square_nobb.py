@@ -170,7 +170,6 @@ def write_data(file_name, N_img):
         #    continue
         
         slice_width = 64
-        print(f'slice_width = {slice_width}')
         height, width = full_image.shape
         num_slices = width // slice_width
         
@@ -207,6 +206,7 @@ def write_data(file_name, N_img):
         
         # Inspect what images were selected later
         sampled_list.append(i_sample)
+    print(f'slice_width  = {slice_width}')
     
     print('Done sampling images!')
     
