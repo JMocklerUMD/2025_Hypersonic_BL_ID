@@ -43,7 +43,7 @@ import time
 #%% Define slice_width based on multiple of wavelength
 
 bound_height = 16 #height of boundary layer in pixels - 16 for run33 in this case
-num_wavelengths = 10 #number of wavelengths in each slice
+num_wavelengths = 5 #number of wavelengths in each slice
 
 slice_width = int(2*bound_height * num_wavelengths)
 print(f'slice_width = {slice_width}')
@@ -443,7 +443,7 @@ print(f"True Pos: {n11}, True Neg: {n00}, False Pos: {n01}, False Neg: {n10}")
 
 
 #%% Save off the model, if desired
-#model.save('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\ConeFlareRe33_normal.keras')
+model.save('C:\\Users\\tyler\\Desktop\\NSSSIP25\\200imgsFromRun33_5wavelengths_160pixelSlices.keras')
 
 #%% Train the fine tuning model
 
@@ -472,7 +472,7 @@ output = tf.keras.layers.Flatten()(output)
 resnet_model = Model(model1.input,output)
 
 # load the classifier
-# model = keras.models.load_model('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\ConeFlareRe33_normal.keras')
+#model = keras.models.load_model('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\ConeFlareRe33_normal.keras')
 
 
 #%% read in images

@@ -38,14 +38,14 @@ output = tf.keras.layers.Flatten()(output)
 resnet_model = Model(model1.input,output)
 
 # load the classifier
-model = keras.models.load_model('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\ConeFlareRe33_normal.keras')
+model = keras.models.load_model('C:\\Users\\tyler\\Desktop\\NSSSIP25\\TrainedModels\\200imgsFromRun33_5wavelengths_160pixelSlices.keras')
 
 
 #%% read in images
 print('Reading training data file')
 
 # Write File Name
-file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\ConeFlare_Shot64_re33_0deg\\training_data.txt'
+file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\LangleyM6_Run34.txt"
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()
@@ -84,8 +84,12 @@ def image_splitting(i, lines):
     #if full_image.shape != (64, 1280):
     #    print(f"Skipping image at line {i+1} — unexpected size {full_image.shape}")
         #continue
+        
+    #added to account for uncropped Langley run 34
+    if full_image.shape == (64,1280):
+        width = 1216
     
-    slice_width = 64
+    slice_width = 160
     height, width = full_image.shape
     num_slices = width // slice_width
     
@@ -96,7 +100,7 @@ def image_splitting(i, lines):
         x_max = x_min + box_width
         y_max = y_min + box_height
     
-    for i in range(num_slices-1):
+    for i in range(num_slices):
         x_start = i * slice_width
         x_end = (i + 1) * slice_width
     
