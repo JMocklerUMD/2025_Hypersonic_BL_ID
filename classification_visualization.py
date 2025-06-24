@@ -184,7 +184,7 @@ output = tf.keras.layers.Flatten()(output)
 resnet_model = Model(model1.input,output)
 
 # Load the classifier
-model = keras.models.load_model('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\ConeFlareRe45_normal.keras')
+model = keras.models.load_model('C:\\Users\\tyler\\Desktop\\NSSSIP25\\TrainedModels\\turb_model_June24_bad.keras')
 
 
 
