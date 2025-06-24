@@ -44,6 +44,25 @@ from sklearn.utils import class_weight
 
 from matplotlib.patches import Rectangle
 
+#%% Be able to run Second-Mode Wave detection, Turbulence detection, or both 
+#(both defaults to using Second-Mode Wave detection dataset for labeling and whole-set statistics)
+
+second_mode = False
+sm_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\wavepacket_labels_combined.txt"
+sm_N_img = 2
+if second_mode:
+    print('Finding second-mode waves')
+
+turb = True
+turb_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\Test1\\run33\\turbulence_training_data.txt"
+turb_N_img = 50
+if turb:
+    print('Finding turbulence')
+
+ne = 5
+
+if not second_mode and not turb:
+    raise ValueError('One or both of second_mode and turb must be true')
 
 #%% Function calls
 '''
@@ -81,8 +100,13 @@ def get_bottleneck_features(model, input_imgs):
              input_imgs: (N, 224, 224, 3) numpy array of (224, 224, 3) images to extract features from       
     OUTPUTS: featues:   (N, 100352) numpy array of extracted ResNet50 features
     '''
-    print('Getting Feature Data From ResNet...')
-    features = model.predict(input_imgs, verbose = 1)
+    verbose = 1
+    if input_imgs.shape == (224,224,3): #adds batch dimension for single images
+        input_imgs = np.expand_dims(input_imgs, axis=0)                # Shape: (1, 224, 224, 3)
+        verbose = 0
+    if verbose == 1:
+        print('Getting Feature Data From ResNet...')
+    features = model.predict(input_imgs, verbose = verbose)
     return features
 
 def img_preprocess(input_image):
@@ -174,22 +198,28 @@ def image_splitting(i, lines):
                 
     return Imagelist, WP_io, slice_width, height, sm_bounds
 
-def classify_the_images(model, Imagelist):
-    Imagelist_resized = np.array([img_preprocess(img) for img in Imagelist])
-    
-    # Run through feature extractor
-    Imagelist_res = get_bottleneck_features(model, Imagelist_resized)
-    
-    # Pass each through the trained NN
-    test_res= model.predict(Imagelist_res, verbose = 0)
-    classification_result = np.round(test_res)
-    
-    return classification_result, test_res
+def classify_the_images(model, resnet_model, Imagelist):
+    if second_mode:
+        Imagelist_resized = np.array([img_preprocess(img) for img in Imagelist])
+        # Run through feature extractor
+        Imagelist_res = get_bottleneck_features(resnet_model, Imagelist_resized)
+        
+        # Pass each through the trained NN
+        test_res= model.predict(Imagelist_res, verbose = 0)
+        classification_result = np.round(test_res)
+        return classification_result, test_res
+    else:
+        test_res = []
+        for _ in Imagelist:
+            test_res.append(0)
+        classification_result = test_res
+        return classification_result, test_res
 
 def classify_the_frame(Imagelist, confidence, window_size, indiv_thres, model_turb):
     n00, n01, n10, n11 = 0, 0, 0, 0 
     filtered_result = []
     classification_result = np.zeros(len(Imagelist))
+    
     for i, _ in enumerate(Imagelist):
         
         # If using the windowed post processing, call the windowing fcn
@@ -200,24 +230,34 @@ def classify_the_frame(Imagelist, confidence, window_size, indiv_thres, model_tu
             # Are window and indiv conditions met?
             if (local_confid > confid_thres) or (confidence[i] > indiv_thres):
                 filtered_result.append(1)
-            else:
-                test_res = round(model_turb.predict(Imagelist(i),verbose=0)) #checks for turbulence
-                if test_res == 0:
+            elif turb: #if we are also checking for turbulence
+                Imagelist_resized = img_preprocess(Imagelist[i])
+                # Run through feature extractor
+                Imagelist_res = get_bottleneck_features(resnet_model, Imagelist_resized)
+                test_res = model_turb.predict(Imagelist_res,verbose=0) #checks for turbulence
+                if test_res < 0:
                     filtered_result.append(0)
                 else:
-                    filtered_result.append(2)
+                    filtered_result.append(2+test_res)
+            else:
+                filtered_result.append(0)
             
             classification_result[i] = filtered_result[i]
         
         # If not, then just round
         else:
             check = np.round(confidence[i])
-            if check == 0:
-                test_res = round(model_turb.predict(Imagelist(i),verbose=0)) #checks for turbulence
+            if check == 0 and turb:
+                Imagelist_resized = img_preprocess(Imagelist[i])
+                # Run through feature extractor
+                Imagelist_res = get_bottleneck_features(resnet_model, Imagelist_resized)
+                test_res = np.round(model_turb.predict(Imagelist_res,verbose=0)) #checks for turbulence
                 if test_res == 0:
                     classification_result[i] = 0
                 else:
-                    classification_result[i] = 2
+                    classification_result[i] = 2+test_res
+            elif check == 0:
+                classification_result[i] = 0
             else:
                 classification_result[i] = check
             
@@ -368,8 +408,10 @@ def write_data(file_name, N_img):
     return trainimgs, testimgs, trainlbs, testlbls, lines_len
 
 #%% Split the test and train images
-trainimgs, testimgs, trainlbs, testlbls, lines_len = write_data("C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\wavepacket_labels_combined.txt", 200)
-trainimgs_turb, testimgs_turb, trainlbs_turb, testlbls_turb, lines_len_turb = write_data("C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\Test1\\run33\\turbulence_training_data.txt", 200)
+if second_mode:
+    trainimgs, testimgs, trainlbs, testlbls, lines_len = write_data(sm_file_name, sm_N_img)
+if turb:
+    trainimgs_turb, testimgs_turb, trainlbs_turb, testlbls_turb, lines_len_turb = write_data(turb_file_name, turb_N_img)
 
 #%% Train the feature extractor model only
 
@@ -447,7 +489,6 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
                                 )
     
     # Train the model! Takes about 20 sec/epoch
-    ne = 20
     batch_size = 16
     history = model.fit(trainimgs_res, trainlbs, 
                         validation_split = 0.25, 
@@ -522,12 +563,14 @@ def feature_extractor_fine_tuning(trainimgs, trainlbs, testimgs):
 
 
 #%% Call fcn to train the model!
-history, model, testimgs_res, ne = feature_extractor_training(trainimgs, trainlbs, testimgs)
-#history, model, testimgs_res, ne = feature_extractor_fine_tuning(trainimgs, trainlbs, testimgs)
-print("Second-mode Wave Model Training Complete!")
+if second_mode:
+    history, model, testimgs_res, ne = feature_extractor_training(trainimgs, trainlbs, testimgs)
+    #history, model, testimgs_res, ne = feature_extractor_fine_tuning(trainimgs, trainlbs, testimgs)
+    print("Second-mode Wave Model Training Complete!")
 
-history_turb, model_turb, testimgs_res_turb, ne_turb = feature_extractor_training(trainimgs_turb, trainlbs_turb, testimgs_turb)
-print("Turbulence Model Training Complete!")
+if turb:
+    history_turb, model_turb, testimgs_res_turb, ne_turb = feature_extractor_training(trainimgs_turb, trainlbs_turb, testimgs_turb)
+    print("Turbulence Model Training Complete!")
 
 #%% Perform the visualization
 '''
@@ -628,10 +671,11 @@ def stats(ne,history,model,testimgs_res,testlbls,name):
     print(f"True Pos: {n11}, True Neg: {n00}, False Pos: {n01}, False Neg: {n10}")
     
 #%% Show results
-stats(ne,history,model,testimgs_res,testlbls,'Second-mode')
+if second_mode:
+    stats(ne,history,model,testimgs_res,testlbls,'Second-mode')
 
-#%%
-stats(ne_turb,history_turb,model_turb,testimgs_res_turb,testlbls_turb,'Turbulence')
+if turb:
+    stats(ne_turb,history_turb,model_turb,testimgs_res_turb,testlbls_turb,'Turbulence')
 
 #%% Save off the model, if desired
 #model.save('C:\\Users\\tyler\\Desktop\\NSSSIP25\\TrainedModels\\run33_strangelyhighvalacc_95.keras')
@@ -645,7 +689,11 @@ stats(ne_turb,history_turb,model_turb,testimgs_res_turb,testlbls_turb,'Turbulenc
 print('Reading training data file')
 
 # Write File Name
-file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\wavepacket_labels_combined.txt"
+if second_mode:
+    file_name = sm_file_name
+else:
+    file_name = turb_file_name
+    
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()
@@ -654,6 +702,12 @@ else:
 
 lines_len = len(lines)
 print(f"{lines_len} lines read")
+
+# Transfer learning model for stacking on ResNet50
+model1 = resnet50.ResNet50(include_top = False, weights ='imagenet', input_shape = (224,224,3))
+output = model1.output
+output = tf.keras.layers.Flatten()(output)
+resnet_model = Model(model1.input,output)
 
 #no need to load in model - already exists
 
@@ -670,7 +724,7 @@ confidence_history = []
 filtered_result_history = []
 
 
-plot_flag = 0               # View the images? MUCH SLOWER
+plot_flag = 1               # View the images? MUCH SLOWER
 window_size = 3             # Moving window to filter the frames
 indiv_thres = 0.85          # Individual exception threshold
 confid_thres = 1.5          # SUMMED confidence over the entire window. 
@@ -681,10 +735,17 @@ use_post_process = 1        # 1 to use windowing post process, 0 if not
 for i_iter in range(N_img):
     
     ### Perform the classification
+    
+    if not second_mode:
+        model = 0 #useless input
+    if not turb:
+        model_turb = 0 #useless input to satisfy classify_the_images inputs if not finding turbulence
+    
     # Split the image and classify the slices
     Imagelist, WP_io, slice_width, height, sm_bounds = image_splitting(i_iter, lines)
-    simple_class_result, confidence = classify_the_images(model, Imagelist)
     
+    simple_class_result, confidence = classify_the_images(model, resnet_model, Imagelist) #works for second_mode with or without turb
+        
     # Analyze and filter the image results
     classification_result, filtered_result, n00, n01, n10, n11 = classify_the_frame(Imagelist, confidence, window_size, indiv_thres,model_turb)
     
@@ -696,6 +757,12 @@ for i_iter in range(N_img):
         fig, ax = plt.subplots(1)
         ax.imshow(imageReconstruct, cmap = 'gray')
         
+        if second_mode:
+            ax.text(-45, height+86,'WP: ', fontsize = 6)
+        if turb:
+            ax.text(-57, height+62,'Turb: ', fontsize = 6)
+
+        
         # Add on classification box rectangles
         for i, _ in enumerate(Imagelist):    
             # Add in the classification guess
@@ -703,9 +770,18 @@ for i_iter in range(N_img):
                 rect = Rectangle((i*slice_width, 5), slice_width, height-10,
                                          linewidth=0.5, edgecolor='red', facecolor='none')
                 ax.add_patch(rect)
+            elif classification_result[i] >= 2:
+                ax.text(i*slice_width+slice_width/5, height+62,f'{(classification_result[i]-2):.2f}', fontsize = 6)
+                if classification_result[i]-2 >= 0.5:
+                    rect = Rectangle((i*slice_width, 5), slice_width, height-10,
+                                             linewidth=0.5, edgecolor='orange', facecolor='none')
+                    ax.add_patch(rect)
+            if second_mode:
+                prob = round(confidence[i,0],2)
+                ax.text(i*slice_width+slice_width/5, height+86,f'{prob:.2f}', fontsize = 6)
             
                 
-            '''
+        '''
             # Adds a rectangle for the confidence of classification at every square
             prob = confidence[i,0]
             rect = Rectangle((i*slice_width, 5), slice_width, height-10,
@@ -730,14 +806,18 @@ for i_iter in range(N_img):
     if plot_flag == 1:
         # Check if there's even a bounding box in the image
         if sm_bounds[0] == 'X':
-            ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN WP. Green: NN Turbulence')
+            ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN WP. Orange: NN Turbulence')
             plt.show()
             continue
         else:
             # Add the ground truth over the entire box
             ax.add_patch(Rectangle((sm_bounds[0],sm_bounds[1]), sm_bounds[2], sm_bounds[3], edgecolor='blue', facecolor='none'))
-        
-            ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN class')
+            if second_mode and turb:
+                ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN WP. Orange: NN Turbulence')
+            elif second_mode:
+                ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN WP')
+            else:
+                ax.set_title('Image '+str(i_iter)+'. Blue: true Turbulence. Orange: NN Turbulence')
             plt.show()
 
 print('Done classifying the video!')
