@@ -53,6 +53,7 @@ sm_N_img = 20
 if second_mode:
     print('Finding second-mode waves')
 
+#turbulence currently does not do post-processing
 turb = True
 turb_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\Test1\\run33\\turbulence_training_data.txt"
 turb_N_img = 20
@@ -64,7 +65,7 @@ plot_flag = 0       # View the images? MUCH SLOWER (view - 1, no images - 0)
 
 
 if not second_mode and not turb:
-    raise ValueError('One or both of second_mode and turb must be true')
+    raise ValueError('One or both of "second_mode" and "turb" must be true')
 
 #%% Function calls
 '''
@@ -201,7 +202,6 @@ def image_splitting(i, lines):
     return Imagelist, WP_io, slice_width, height, sm_bounds
 
 def classify_the_images(model, resnet_model, Imagelist):
-    if second_mode:
         Imagelist_resized = np.array([img_preprocess(img) for img in Imagelist])
         # Run through feature extractor
         Imagelist_res = get_bottleneck_features(resnet_model, Imagelist_resized)
@@ -210,70 +210,85 @@ def classify_the_images(model, resnet_model, Imagelist):
         test_res= model.predict(Imagelist_res, verbose = 0)
         classification_result = np.round(test_res)
         return classification_result, test_res
-    else:
-        test_res = []
-        for _ in Imagelist:
-            test_res.append(0)
-        classification_result = test_res
-        return classification_result, test_res
 
-def classify_the_frame(Imagelist, confidence, window_size, indiv_thres, model_turb):
+
+def classify_the_frame(Imagelist,WP_io, confidence, window_size, indiv_thres, model_turb):
     n00, n01, n10, n11 = 0, 0, 0, 0 
     filtered_result = []
     classification_result = np.zeros(len(Imagelist))
     
-    for i, _ in enumerate(Imagelist):
-        
-        # If using the windowed post processing, call the windowing fcn
-        # to get the locally informed confidence. Then compare to thresholds
-        if use_post_process == 1:
-            local_confid = calc_windowed_confid(i, confidence, window_size)
-            
-            # Are window and indiv conditions met?
-            if (local_confid > confid_thres) or (confidence[i] > indiv_thres):
-                filtered_result.append(1)
-            elif turb: #if we are also checking for turbulence
-                Imagelist_resized = img_preprocess(Imagelist[i])
-                # Run through feature extractor
-                Imagelist_res = get_bottleneck_features(resnet_model, Imagelist_resized)
-                test_res = model_turb.predict(Imagelist_res,verbose=0) #checks for turbulence
-                if test_res < 0:
-                    filtered_result.append(0)
+    if second_mode:
+        for i, _ in enumerate(Imagelist):
+            # If using the windowed post processing, call the windowing fcn
+            # to get the locally informed confidence. Then compare to thresholds
+            if use_post_process == 1:
+                local_confid = calc_windowed_confid(i, confidence, window_size)
+                
+                # Are window and indiv conditions met?
+                if (local_confid > confid_thres) or (confidence[i] > indiv_thres):
+                    filtered_result.append(1)
+                elif turb: #if we are also checking for turbulence
+                    Imagelist_resized = img_preprocess(Imagelist[i])
+                    # Run through feature extractor
+                    Imagelist_res = get_bottleneck_features(resnet_model, Imagelist_resized)
+                    test_res = model_turb.predict(Imagelist_res,verbose=0) #checks for turbulence
+                    if test_res < 0:
+                        filtered_result.append(0)
+                    else:
+                        filtered_result.append(2+test_res)
                 else:
-                    filtered_result.append(2+test_res)
-            else:
-                filtered_result.append(0)
+                    filtered_result.append(0)
+                
+                classification_result[i] = filtered_result[i]
             
-            classification_result[i] = filtered_result[i]
-        
-        # If not, then just round
-        else:
-            check = np.round(confidence[i])
-            if check == 0 and turb:
-                Imagelist_resized = img_preprocess(Imagelist[i])
-                # Run through feature extractor
-                Imagelist_res = get_bottleneck_features(resnet_model, Imagelist_resized)
-                test_res = np.round(model_turb.predict(Imagelist_res,verbose=0)) #checks for turbulence
-                if test_res == 0:
+            # If not, then just round
+            else:
+                check = np.round(confidence[i])
+                if check == 0 and turb:
+                    Imagelist_resized = img_preprocess(Imagelist[i])
+                    # Run through feature extractor
+                    Imagelist_res = get_bottleneck_features(resnet_model, Imagelist_resized)
+                    test_res = model_turb.predict(Imagelist_res,verbose=0) #checks for turbulence
+                    if test_res < 0.5:
+                        classification_result[i] = 0
+                    else:
+                        classification_result[i] = 2+test_res
+                elif check == 0:
                     classification_result[i] = 0
                 else:
-                    classification_result[i] = 2+test_res
-            elif check == 0:
+                    classification_result[i] = check
+                
+            # Get stats on the current image
+            if WP_io[i] == 0:
+                if classification_result[i] != 1:
+                    n00 += 1
+                if classification_result[i] == 1:
+                    n01 += 1 
+            elif WP_io[i] == 1:
+                if classification_result[i] != 1:
+                    n10 += 1
+                if classification_result[i] == 1:
+                    n11 += 1
+    else: #for turbulence only
+        for i, _ in enumerate(Imagelist):
+            test_res = confidence[i]
+            if test_res < 0.5:
                 classification_result[i] = 0
             else:
-                classification_result[i] = check
+                classification_result[i] = 2+test_res
             
-        # Get stats on the current image
-        if WP_io[i] == 0:
-            if classification_result[i] != 1:
-                n00 += 1
-            if classification_result[i] == 1:
-                n01 += 1 
-        elif WP_io[i] == 1:
-            if classification_result[i] != 1:
-                n10 += 1
-            if classification_result[i] == 1:
-                n11 += 1
+            # Get stats on the current image
+            if WP_io[i] == 0:
+                if classification_result[i] != 1:
+                    n00 += 1
+                if classification_result[i] == 1:
+                    n01 += 1 
+            elif WP_io[i] == 1:
+                if classification_result[i] != 1:
+                    n10 += 1
+                if classification_result[i] == 1:
+                    n11 += 1                
+            
                 
     return classification_result, filtered_result, n00, n01, n10, n11
 
@@ -734,7 +749,7 @@ confid_thres = 1.5          # SUMMED confidence over the entire window.
 use_post_process = 1        # 1 to use windowing post process, 0 if not
 
 ### Iterate over all frames in the video
-for i_iter in range(N_img):
+for i_iter in range(30): #range(N_img) can be changed to a range(#) for shorter loops for troubleshooting
     
     ### Perform the classification
     
@@ -746,10 +761,13 @@ for i_iter in range(N_img):
     # Split the image and classify the slices
     Imagelist, WP_io, slice_width, height, sm_bounds = image_splitting(i_iter, lines)
         
-    simple_class_result, confidence = classify_the_images(model, resnet_model, Imagelist) #works for second_mode with or without turb
+    if second_mode:
+        simple_class_result, confidence = classify_the_images(model, resnet_model, Imagelist)
+    else:
+        simple_class_result, confidence = classify_the_images(model_turb, resnet_model, Imagelist)
         
     # Analyze and filter the image results
-    classification_result, filtered_result, n00, n01, n10, n11 = classify_the_frame(Imagelist, confidence, window_size, indiv_thres,model_turb)
+    classification_result, filtered_result, n00, n01, n10, n11 = classify_the_frame(Imagelist,WP_io, confidence, window_size, indiv_thres,model_turb)
     
     
     ### Restitch and display the classification results
