@@ -60,6 +60,8 @@ if turb:
     print('Finding turbulence')
 
 ne = 5
+plot_flag = 0       # View the images? MUCH SLOWER (view - 1, no images - 0)
+
 
 if not second_mode and not turb:
     raise ValueError('One or both of second_mode and turb must be true')
@@ -724,7 +726,7 @@ confidence_history = []
 filtered_result_history = []
 
 
-plot_flag = 1               # View the images? MUCH SLOWER
+plot_flag = plot_flag       # View the images? MUCH SLOWER
 window_size = 3             # Moving window to filter the frames
 indiv_thres = 0.85          # Individual exception threshold
 confid_thres = 1.5          # SUMMED confidence over the entire window. 
