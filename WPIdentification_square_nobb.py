@@ -49,13 +49,13 @@ from matplotlib.patches import Rectangle
 
 second_mode = False
 sm_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\wavepacket_labels_combined.txt"
-sm_N_img = 2
+sm_N_img = 20
 if second_mode:
     print('Finding second-mode waves')
 
 turb = True
 turb_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\Test1\\run33\\turbulence_training_data.txt"
-turb_N_img = 50
+turb_N_img = 20
 if turb:
     print('Finding turbulence')
 
@@ -743,7 +743,7 @@ for i_iter in range(N_img):
     
     # Split the image and classify the slices
     Imagelist, WP_io, slice_width, height, sm_bounds = image_splitting(i_iter, lines)
-    
+        
     simple_class_result, confidence = classify_the_images(model, resnet_model, Imagelist) #works for second_mode with or without turb
         
     # Analyze and filter the image results
@@ -822,142 +822,148 @@ for i_iter in range(N_img):
 
 print('Done classifying the video!')
 
-
+#%% Whole-set stats
+def whole_set_stats(Imagelist,acc_history,TP_history,TN_history,FP_history,FN_history):
 #%% Make history plot
-Nframe_per_img = len(Imagelist)
-n = 20 # Moving avg window
+    Nframe_per_img = len(Imagelist)
+    n = 20 # Moving avg window
+        
+    fig, (pl1, pl2, pl3, pl4, pl5) = plt.subplots(5,1, figsize = (16,16))
+    pl1.plot(range(len(acc_history)), acc_history)
+    pl1.plot(range(n-1, len(acc_history)), moving_average(acc_history, n), color='k', linewidth = 2)
+    pl1.set_title('Accuracy')
     
-fig, (pl1, pl2, pl3, pl4, pl5) = plt.subplots(5,1, figsize = (16,16))
-pl1.plot(range(len(acc_history)), acc_history)
-pl1.plot(range(n-1, len(acc_history)), moving_average(acc_history, n), color='k', linewidth = 2)
-pl1.set_title('Accuracy')
-
-pl2.plot(range(len(TP_history)), [img_stat/Nframe_per_img for img_stat in TP_history])
-pl2.plot(range(n-1, len(acc_history)), moving_average(TP_history, n)/Nframe_per_img, color='k', linewidth = 2)
-pl2.set_title('True positive rate')
-
-pl3.plot(range(len(TN_history)), [img_stat/Nframe_per_img for img_stat in TN_history])
-pl3.plot(range(n-1, len(TN_history)), moving_average(TN_history, n)/Nframe_per_img, color='k', linewidth = 2)
-pl3.set_title('True negative rate')
-
-pl4.plot(range(len(FP_history)), [img_stat/Nframe_per_img for img_stat in FP_history])
-pl4.plot(range(n-1, len(FP_history)), moving_average(FP_history, n)/Nframe_per_img, color='k', linewidth = 2)
-pl4.set_title('False positive rate')
-
-pl5.plot(range(len(FN_history)), [img_stat/Nframe_per_img for img_stat in FN_history])
-pl5.plot(range(n-1, len(FN_history)), moving_average(FN_history, n)/Nframe_per_img, color='k', linewidth = 2)
-pl5.set_title('False negative rate')
-
-
-#%% Compute MICE
-Nframe_per_img = len(Imagelist)
-MICE = []
-for i in range(len(acc_history)):
-    n0 = TP_history[i] + FP_history[i]
-    n1 = TN_history[i] + FN_history[i]
+    pl2.plot(range(len(TP_history)), [img_stat/Nframe_per_img for img_stat in TP_history])
+    pl2.plot(range(n-1, len(acc_history)), moving_average(TP_history, n)/Nframe_per_img, color='k', linewidth = 2)
+    pl2.set_title('True positive rate')
     
-    A0 = (n0/Nframe_per_img)**2 + (n1/Nframe_per_img)**2
-    if np.isclose(1-A0, 0):
-        MICE.append(0.0)
-    else:
-        MICE.append((acc_history[i] - A0)/(1-A0))
+    pl3.plot(range(len(TN_history)), [img_stat/Nframe_per_img for img_stat in TN_history])
+    pl3.plot(range(n-1, len(TN_history)), moving_average(TN_history, n)/Nframe_per_img, color='k', linewidth = 2)
+    pl3.set_title('True negative rate')
+    
+    pl4.plot(range(len(FP_history)), [img_stat/Nframe_per_img for img_stat in FP_history])
+    pl4.plot(range(n-1, len(FP_history)), moving_average(FP_history, n)/Nframe_per_img, color='k', linewidth = 2)
+    pl4.set_title('False positive rate')
+    
+    pl5.plot(range(len(FN_history)), [img_stat/Nframe_per_img for img_stat in FN_history])
+    pl5.plot(range(n-1, len(FN_history)), moving_average(FN_history, n)/Nframe_per_img, color='k', linewidth = 2)
+    pl5.set_title('False negative rate')
     
     
-fig, ax = plt.subplots(1,1, figsize = (16,6))
-ax.plot(range(len(MICE)), MICE)
-ax.plot(range(n-1, len(MICE)), moving_average(MICE, n), color='k', linewidth = 2)
-ax.set_ylim(-1,1)
-ax.set_title('MICE Performance')
-
-
-#%% Print out the entire data set statistics
-print("Data set statistics")
-print("----------------------------------------")
-print(f"Whole-set Average: {np.mean(acc_history)}")
-print(f"Whole-set True Positive rate: {np.mean(TP_history)/Nframe_per_img}")
-print(f"Whole-set True Negative rate: {np.mean(TN_history)/Nframe_per_img}")
-print(f"Whole-set False Positive rate: {np.mean(FP_history)/Nframe_per_img}")
-print(f"Whole-set False Negative rate: {np.mean(FN_history)/Nframe_per_img}")
-print(f"Whole-set MICE Score: {np.mean(MICE)}")
-
-
-#%% Form an ROC curve
-thresholds = np.linspace(0, 1, num=50)
-TPRs, FPRs, Pres = [], [], []
-# Loop thru the thresholds
-for threshold in thresholds:
-    TP, FP, TN, FN = 0, 0, 0, 0
-    
-    # Loop thru each image in the test set
+    # Compute MICE
+    Nframe_per_img = len(Imagelist)
+    MICE = []
     for i in range(len(acc_history)):
+        n0 = TP_history[i] + FP_history[i]
+        n1 = TN_history[i] + FN_history[i]
         
-        # Pull off the sliced list
-        WP_io_img = WP_io_history[i]
-        confid_img = confidence_history[i]
-        slice_classification = []
+        A0 = (n0/Nframe_per_img)**2 + (n1/Nframe_per_img)**2
+        if np.isclose(1-A0, 0):
+            MICE.append(0.0)
+        else:
+            MICE.append((acc_history[i] - A0)/(1-A0))
         
-        # Form the classification list under the new thrshold
-        n00, n01, n10, n11 = 0, 0, 0, 0 
-        for j in range(len(WP_io_img)):
-            if confid_img[j] > threshold:
-                slice_classification.append(1)
-            else:
-                slice_classification.append(0)
-                
-            # Now compute the TPR/FPR of the frame
-            if WP_io_img[j] == 0:
-                if slice_classification[j] == 0:
-                    n00 += 1
-                if slice_classification[j] == 1:
-                    n01 += 1 
-            elif WP_io_img[j] == 1:
-                if slice_classification[j] == 0:
-                    n10 += 1
-                if slice_classification[j] == 1:
-                    n11 += 1
         
-        # Finally, add to the grand list per threshold
-        TP = TP + n11
-        FP = FP + n01
-        TN = TN + n00
-        FN = FN + n10
-        
-    # Now calculate the percentages
-    TPRs.append(TP/(TP+FN))
-    FPRs.append(FP/(FP+TN))
-    if (TP+FP) == 0:
-        Pres.append(1.0)
-    else:
-        Pres.append(TP/(TP+FP))
+    fig, ax = plt.subplots(1,1, figsize = (16,6))
+    ax.plot(range(len(MICE)), MICE)
+    ax.plot(range(n-1, len(MICE)), moving_average(MICE, n), color='k', linewidth = 2)
+    ax.set_ylim(-1,1)
+    ax.set_title('MICE Performance')
     
+    
+    # Print out the entire data set statistics
+    print("Data set statistics")
+    print("----------------------------------------")
+    print(f"Whole-set Average: {np.mean(acc_history)}")
+    print(f"Whole-set True Positive rate: {np.mean(TP_history)/Nframe_per_img}")
+    print(f"Whole-set True Negative rate: {np.mean(TN_history)/Nframe_per_img}")
+    print(f"Whole-set False Positive rate: {np.mean(FP_history)/Nframe_per_img}")
+    print(f"Whole-set False Negative rate: {np.mean(FN_history)/Nframe_per_img}")
+    print(f"Whole-set MICE Score: {np.mean(MICE)}")
+    
+    
+    # Form an ROC curve
+    thresholds = np.linspace(0, 1, num=50)
+    TPRs, FPRs, Pres = [], [], []
+    # Loop thru the thresholds
+    for threshold in thresholds:
+        TP, FP, TN, FN = 0, 0, 0, 0
+        
+        # Loop thru each image in the test set
+        for i in range(len(acc_history)):
+            
+            # Pull off the sliced list
+            WP_io_img = WP_io_history[i]
+            confid_img = confidence_history[i]
+            slice_classification = []
+            
+            # Form the classification list under the new thrshold
+            n00, n01, n10, n11 = 0, 0, 0, 0 
+            for j in range(len(WP_io_img)):
+                if confid_img[j] > threshold:
+                    slice_classification.append(1)
+                else:
+                    slice_classification.append(0)
+                    
+                # Now compute the TPR/FPR of the frame
+                if WP_io_img[j] == 0:
+                    if slice_classification[j] == 0:
+                        n00 += 1
+                    if slice_classification[j] == 1:
+                        n01 += 1 
+                elif WP_io_img[j] == 1:
+                    if slice_classification[j] == 0:
+                        n10 += 1
+                    if slice_classification[j] == 1:
+                        n11 += 1
+            
+            # Finally, add to the grand list per threshold
+            TP = TP + n11
+            FP = FP + n01
+            TN = TN + n00
+            FN = FN + n10
+            
+        # Now calculate the percentages
+        TPRs.append(TP/(TP+FN))
+        FPRs.append(FP/(FP+TN))
+        if (TP+FP) == 0:
+            Pres.append(1.0)
+        else:
+            Pres.append(TP/(TP+FP))
+        
+    
+    # Compute the AUC of the ROC - simple rectangular integration
+    AUC = 0.0
+    for i in range(1,len(TPRs)):
+        AUC = AUC + (FPRs[i-1]-FPRs[i])*(TPRs[i]+TPRs[i-1])/2    
+    print(f'Area under the ROC Curve = {AUC}')
+    
+    PR = 0.0
+    for i in range(1,len(TPRs)):
+        PR = PR + (Pres[i]+Pres[i-1])*(TPRs[i-1]-TPRs[i])/2    
+    print(f'Area under the PR Curve = {PR}')
+    
+    # Plot the curve
+    fig, (ax, ax2) = plt.subplots(1,2, figsize = (16,8))
+    ax.plot(FPRs, TPRs, '--.', markersize=10)
+    ax.plot(np.linspace(0,1,num=100), np.linspace(0,1,num=100))
+    ax.set_title('ROC Curve')
+    ax.set_xlabel('False Positive Rate')
+    ax.set_ylabel('True Positive Rate')
+    
+    ax2.plot(TPRs, Pres, '--.', markersize=10)
+    ax2.plot(np.linspace(0,1,num=100), np.flip(np.linspace(0,1,num=100)))
+    ax2.set_title('Precision-Recall Curve')
+    ax2.set_xlabel('Recall (True Positive Rate)')
+    ax2.set_ylabel('Precision')
+    
+    plt.show()
 
-# Compute the AUC of the ROC - simple rectangular integration
-AUC = 0.0
-for i in range(1,len(TPRs)):
-    AUC = AUC + (FPRs[i-1]-FPRs[i])*(TPRs[i]+TPRs[i-1])/2    
-print(f'Area under the ROC Curve = {AUC}')
-
-PR = 0.0
-for i in range(1,len(TPRs)):
-    PR = PR + (Pres[i]+Pres[i-1])*(TPRs[i-1]-TPRs[i])/2    
-print(f'Area under the PR Curve = {PR}')
-
-# Plot the curve
-fig, (ax, ax2) = plt.subplots(1,2, figsize = (16,8))
-ax.plot(FPRs, TPRs, '--.', markersize=10)
-ax.plot(np.linspace(0,1,num=100), np.linspace(0,1,num=100))
-ax.set_title('ROC Curve')
-ax.set_xlabel('False Positive Rate')
-ax.set_ylabel('True Positive Rate')
-
-ax2.plot(TPRs, Pres, '--.', markersize=10)
-ax2.plot(np.linspace(0,1,num=100), np.flip(np.linspace(0,1,num=100)))
-ax2.set_title('Precision-Recall Curve')
-ax2.set_xlabel('Recall (True Positive Rate)')
-ax2.set_ylabel('Precision')
-
-plt.show()
-
-
-
+#%% Run whole-set stats
+if second_mode:
+    print('Whole-set stats based on Second-mode Waves')
+    whole_set_stats(Imagelist,acc_history,TP_history,TN_history,FP_history,FN_history)
+else:
+    print('Whole-set stats based on Turbulence')
+    whole_set_stats(Imagelist,acc_history,TP_history,TN_history,FP_history,FN_history)
 
