@@ -61,7 +61,7 @@ if turb:
     print('Finding turbulence')
 
 ne = 5
-plot_flag = 0       # View the images? MUCH SLOWER (view - 1, no images - 0)
+plot_flag = 1       # View the images? MUCH SLOWER (view - 1, no images - 0)
 
 
 if not second_mode and not turb:
@@ -279,14 +279,14 @@ def classify_the_frame(Imagelist,WP_io, confidence, window_size, indiv_thres, mo
             
             # Get stats on the current image
             if WP_io[i] == 0:
-                if classification_result[i] != 1:
+                if classification_result[i] == 0:
                     n00 += 1
-                if classification_result[i] == 1:
+                if classification_result[i] != 0:
                     n01 += 1 
             elif WP_io[i] == 1:
-                if classification_result[i] != 1:
+                if classification_result[i] == 0:
                     n10 += 1
-                if classification_result[i] == 1:
+                if classification_result[i] != 0:
                     n11 += 1                
             
                 
