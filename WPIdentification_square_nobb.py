@@ -49,19 +49,23 @@ from matplotlib.patches import Rectangle
 
 second_mode = True
 sm_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\wavepacket_labels_combined.txt"
-sm_N_img = 20
+sm_N_img = 50
 if second_mode:
     print('Finding second-mode waves')
 
 #turbulence currently does not do post-processing
 turb = True
 turb_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\Test1\\run33\\turbulence_training_data.txt"
-turb_N_img = 20
+turb_N_img = 50
 if turb:
     print('Finding turbulence')
+    
+whole_set_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\110000_111000_decimateby1\\Test1\\run33\\video_data.txt"
 
-ne = 5
-plot_flag = 1       # View the images? MUCH SLOWER (view - 1, no images - 0)
+ne = 12
+plot_flag = 0       # View the images? MUCH SLOWER (view - 1, no images - 0)
+N_frames = 200      # Number of frames to go through for whole-set
+                    # If you want the whole-set -> N_frames = -1
 
 
 if not second_mode and not turb:
@@ -706,13 +710,8 @@ if turb:
 print('Reading training data file')
 
 # Write File Name
-if second_mode:
-    file_name = sm_file_name
-else:
-    file_name = turb_file_name
-    
-if os.path.exists(file_name):
-    with open(file_name, 'r') as file:
+if os.path.exists(whole_set_file_name):
+    with open(whole_set_file_name, 'r') as file:
         lines = file.readlines()
 else:
     raise ValueError("No training_data file detected")
@@ -739,6 +738,7 @@ FN_history = []
 WP_io_history = []
 confidence_history = []
 filtered_result_history = []
+classification_history = []
 
 
 plot_flag = plot_flag       # View the images? MUCH SLOWER
@@ -748,8 +748,11 @@ confid_thres = 1.5          # SUMMED confidence over the entire window.
                             # e.g. for 0.5 over 3 windows, make this value 1.5
 use_post_process = 1        # 1 to use windowing post process, 0 if not
 
+if N_frames == -1:
+    N_frames = N_img
+
 ### Iterate over all frames in the video
-for i_iter in range(30): #range(N_img) can be changed to a range(#) for shorter loops for troubleshooting
+for i_iter in range(N_frames): #range(N_img) can be changed to a range(#) for shorter loops for troubleshooting
     
     ### Perform the classification
     
@@ -821,6 +824,8 @@ for i_iter in range(30): #range(N_img) can be changed to a range(#) for shorter 
     confidence_history.append(confidence)
     WP_io_history.append(WP_io)
     filtered_result_history.append(filtered_result)
+    classification_history.append(classification_result)
+    
     
     ### Finally, plot the ground truth
     if plot_flag == 1:
@@ -987,3 +992,28 @@ else:
     print('Whole-set stats based on Turbulence')
     whole_set_stats(Imagelist,acc_history,TP_history,TN_history,FP_history,FN_history)
 
+#%% Simple breakdown code
+# if a slice is turbulence check if the slice before it in the previous frame was a WP
+# assumes waves propogate at one slice per frame interval
+
+where = [] #store where the breakdown occurs
+    
+if second_mode and turb: 
+    ### Iterate over all frames in the video
+    for i_iter in range(N_frames):
+        if i_iter == 0: #skips the first frame (can't go back in time to check breakdown)
+            continue
+        for i, _ in enumerate(Imagelist):
+            if i == 0: #skips the first slice (can't go back in space to check breakdown)
+                continue
+            if (classification_history[i_iter][i])-2 > 0.5: #if turbulent...
+                if classification_history[(i_iter-1)][(i-1)]: #look back one in time and space to see it a WP preceeded it
+                    where.append(i)
+    plt.hist(where)
+    plt.show()
+    
+    
+    
+    
+    
+    

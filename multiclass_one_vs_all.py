@@ -24,8 +24,37 @@ from sklearn.utils import class_weight
 
 #%% Input files and run settings
 
-file_name1 = ''
-N_imgs_1 = 200
+N_positive_classes = 2
 
-ne = 20
+if N_positive_classes >= 1:
+    file_name1 = ''
+    N_imgs_1 = 200
+if N_positive_classes >= 2:
+    file_name2 = ''
+    N_imgs_2 = 200
+if N_positive_classes >= 3:
+    file_name3 = ''
+    N_imgs_3 = 200
+if N_positive_classes >= 4:
+    file_name4 = ''
+    N_imgs_4 = 200
+if N_positive_classes >= 5:
+    file_name5 = ''
+    N_imgs_5 = 200
+if N_positive_classes >= 6:
+    file_name6 = ''
+    N_imgs_6 = 200
+
+ne = 20             # Number of epoches
+early_stop = False  # Do early stopping?
+
+whole_set_file_name = file_name1
+plot_flag = 1       # View the images? MUCH SLOWER (view - 1, no images - 0)
+N_frames = -1       # Number of frames to go through for whole-set
+                    # If you want the whole-set -> N_frames = -1
+
+if N_positive_classes < 1 and  N_positive_classes > 6 and not isinstance(N_positive_classes,int):
+    raise ValueError('N_positive_classes must be an integer 1 to 6')
+
+#%% Define functions
 
