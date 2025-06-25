@@ -47,7 +47,7 @@ from matplotlib.patches import Rectangle
 #%% Be able to run Second-Mode Wave detection, Turbulence detection, or both 
 #(both defaults to using Second-Mode Wave detection dataset for labeling and whole-set statistics)
 
-second_mode = False
+second_mode = True
 sm_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\wavepacket_labels_combined.txt"
 sm_N_img = 20
 if second_mode:
@@ -209,10 +209,10 @@ def classify_the_images(model, resnet_model, Imagelist):
         # Pass each through the trained NN
         test_res= model.predict(Imagelist_res, verbose = 0)
         classification_result = np.round(test_res)
-        return classification_result, test_res
+        return classification_result, test_res, Imagelist_res
 
 
-def classify_the_frame(Imagelist,WP_io, confidence, window_size, indiv_thres, model_turb):
+def classify_the_frame(Imagelist,WP_io, confidence, window_size, indiv_thres, model_turb,Imagelist_res):
     n00, n01, n10, n11 = 0, 0, 0, 0 
     filtered_result = []
     classification_result = np.zeros(len(Imagelist))
@@ -228,10 +228,10 @@ def classify_the_frame(Imagelist,WP_io, confidence, window_size, indiv_thres, mo
                 if (local_confid > confid_thres) or (confidence[i] > indiv_thres):
                     filtered_result.append(1)
                 elif turb: #if we are also checking for turbulence
-                    Imagelist_resized = img_preprocess(Imagelist[i])
+                    #Imagelist_resized = img_preprocess(Imagelist[i])
                     # Run through feature extractor
-                    Imagelist_res = get_bottleneck_features(resnet_model, Imagelist_resized)
-                    test_res = model_turb.predict(Imagelist_res,verbose=0) #checks for turbulence
+                    #Imagelist_res = get_bottleneck_features(resnet_model, Imagelist_resized)
+                    test_res = model_turb.predict(Imagelist_res[i:i+1],verbose=0) #checks for turbulence
                     if test_res < 0:
                         filtered_result.append(0)
                     else:
@@ -245,10 +245,10 @@ def classify_the_frame(Imagelist,WP_io, confidence, window_size, indiv_thres, mo
             else:
                 check = np.round(confidence[i])
                 if check == 0 and turb:
-                    Imagelist_resized = img_preprocess(Imagelist[i])
+                    #Imagelist_resized = img_preprocess(Imagelist[i])
                     # Run through feature extractor
-                    Imagelist_res = get_bottleneck_features(resnet_model, Imagelist_resized)
-                    test_res = model_turb.predict(Imagelist_res,verbose=0) #checks for turbulence
+                    #Imagelist_res = get_bottleneck_features(resnet_model, Imagelist_resized)
+                    test_res = model_turb.predict(Imagelist_res[i:i+1],verbose=0) #checks for turbulence
                     if test_res < 0.5:
                         classification_result[i] = 0
                     else:
@@ -762,12 +762,12 @@ for i_iter in range(30): #range(N_img) can be changed to a range(#) for shorter 
     Imagelist, WP_io, slice_width, height, sm_bounds = image_splitting(i_iter, lines)
         
     if second_mode:
-        simple_class_result, confidence = classify_the_images(model, resnet_model, Imagelist)
+        simple_class_result, confidence, Imagelist_res = classify_the_images(model, resnet_model, Imagelist)
     else:
-        simple_class_result, confidence = classify_the_images(model_turb, resnet_model, Imagelist)
+        simple_class_result, confidence, Imagelist_res = classify_the_images(model_turb, resnet_model, Imagelist)
         
     # Analyze and filter the image results
-    classification_result, filtered_result, n00, n01, n10, n11 = classify_the_frame(Imagelist,WP_io, confidence, window_size, indiv_thres,model_turb)
+    classification_result, filtered_result, n00, n01, n10, n11 = classify_the_frame(Imagelist,WP_io, confidence, window_size, indiv_thres,model_turb,Imagelist_res)
     
     
     ### Restitch and display the classification results
