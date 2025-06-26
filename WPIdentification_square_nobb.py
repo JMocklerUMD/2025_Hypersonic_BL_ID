@@ -49,22 +49,22 @@ from matplotlib.patches import Rectangle
 
 second_mode = True
 sm_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\wavepacket_labels_combined.txt"
-sm_N_img = 50
+sm_N_img = 200
 if second_mode:
     print('Finding second-mode waves')
 
 #turbulence currently does not do post-processing
 turb = True
 turb_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\Test1\\run33\\turbulence_training_data.txt"
-turb_N_img = 50
+turb_N_img = 200
 if turb:
     print('Finding turbulence')
     
 whole_set_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\110000_111000_decimateby1\\Test1\\run33\\video_data.txt"
 
-ne = 12
-plot_flag = 0       # View the images? MUCH SLOWER (view - 1, no images - 0)
-N_frames = 200      # Number of frames to go through for whole-set
+ne = 20
+plot_flag = 1       # View the images? MUCH SLOWER (view - 1, no images - 0)
+N_frames = -1      # Number of frames to go through for whole-set
                     # If you want the whole-set -> N_frames = -1
 
 
@@ -1012,8 +1012,22 @@ if second_mode and turb:
     plt.hist(where)
     plt.show()
     
-    
-    
-    
-    
+#%% More complex breakdown code
+
+#can maybe add code later to do unit propagation speed conversion from m/s or something comparable
+'''
+pro_speed_pix_frame = 43 # propagation speed in pixels/frame
+
+if second_mode and turb: 
+    ### Iterate over all frames in the video
+    for i_iter in range(N_frames):
+        if i_iter == 0: #skips the first frame -- (can't go back in time to check breakdown)
+            continue
+        for i, _ in enumerate(Imagelist):
+            if i <= pro_speed_pix_frame//slice_width-1: #skips the first slice (or multiple if pro. speed is high enough) -- (can't go back in space to check breakdown)
+                continue
+            streak = 0
+            if (classification_history[i_iter][i])-2 > 0.5: #if turbulent...
+                if classification_history[(i_iter-1)][(i-pro_speed_pix_frame//slice_width)]: #look back one in time and [] in space to see it a WP preceeded it
+'''               
     
