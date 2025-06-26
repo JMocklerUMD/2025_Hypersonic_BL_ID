@@ -79,7 +79,7 @@ def get_bottleneck_features(model, input_imgs):
              input_imgs: (N, 224, 224, 3) numpy array of (224, 224, 3) images to extract features from       
     OUTPUTS: featues:   (N, 100352) numpy array of extracted ResNet50 features
     '''
-    print('Getting Feature Data From ResNet...')
+    #print('Getting Feature Data From ResNet...')
 	features = model.predict(input_imgs, verbose = 1)
 	return features
 
@@ -105,7 +105,7 @@ def img_preprocess(input_image):
 print('Reading training data file')
 
 # Write File Name
-file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\ConeFlare_Shot64_re33_0deg\\training_data.txt'
+file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\run34\\training_data_LangleyRun34.txt'
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()
@@ -122,7 +122,7 @@ print('Begin writing training data to numpy array')
 WP_io = []
 #SM_bounds_Array = []
 Imagelist = []
-N_img, N_tot = 250, lines_len
+N_img, N_tot = 150, lines_len
 i_sample, img_count = 0, 0
 sampled_list = []
 
@@ -303,8 +303,8 @@ def feature_extractor_fine_tuning(trainimgs, trainlbs, testimgs):
             testimgs:       (M, 224, 224, 3) numpy array of (224, 224, 3) image slices to test the model.
     
     OUTPUTS: history:       keras NN model training history object
-             model:         trained NN model of JUST the 256 dense NN
-             testimgs_res:  (M, 100532) ResNet50 feature vector for each test image slice
+             model:         BOTH the resnet model and the 256NN model
+             testimgs_res:  (M, 224, 224, 3) array of images, passed back to be compatable with other functions
              ne:            number of epochs trained
     """
     # Form the base model
@@ -453,5 +453,5 @@ print(f"True Pos: {n11}, True Neg: {n00}, False Pos: {n01}, False Neg: {n10}")
 
 
 #%% Save off the model, if desired
-model.save('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\ConeFlareRe33_normal.keras')
+model.save('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\Run34_normal_NNSize128.keras')
 
