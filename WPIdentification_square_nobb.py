@@ -49,23 +49,23 @@ from matplotlib.patches import Rectangle
 
 second_mode = True
 sm_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\wavepacket_labels_combined.txt"
-sm_N_img = 50
+sm_N_img = 200
 if second_mode:
     print('Finding second-mode waves')
 
 #turbulence currently does not do post-processing
 turb = True
 turb_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\Test1\\run33\\turbulence_training_data.txt"
-turb_N_img = 50
+turb_N_img = 200
 if turb:
     print('Finding turbulence')
     
 whole_set_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\110000_111000_decimateby1\\Test1\\run33\\video_data.txt"
 
 slice_width = 128
-ne = 10
+ne = 20
 plot_flag = 0      # View the images? MUCH SLOWER (view - 1, no images - 0)
-N_frames = 200      # Number of frames to go through for whole-set
+N_frames = 250      # Number of frames to go through for whole-set
                     # If you want the whole-set -> N_frames = -1
 
 # Calculate approx how many pixels a wave will propagate in a single frame
