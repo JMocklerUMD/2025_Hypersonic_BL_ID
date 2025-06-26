@@ -49,27 +49,31 @@ from matplotlib.patches import Rectangle
 
 second_mode = True
 sm_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\wavepacket_labels_combined.txt"
-sm_N_img = 20
+sm_N_img = 200
 if second_mode:
     print('Finding second-mode waves')
 
 #turbulence currently does not do post-processing
 turb = True
 turb_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\Test1\\run33\\turbulence_training_data.txt"
-turb_N_img = 20
+turb_N_img = 200
 if turb:
     print('Finding turbulence')
     
 whole_set_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\110000_111000_decimateby1\\Test1\\run33\\video_data.txt"
 
 slice_width = 64
-ne = 3
+ne = 20
 plot_flag = 0      # View the images? MUCH SLOWER (view - 1, no images - 0)
 N_frames = -1      # Number of frames to go through for whole-set
                     # If you want the whole-set -> N_frames = -1
 
-pro_speed_pix_frame = 41 # propagation speed in pixels/frame
-
+# Calculate approx how many pixels a wave will propagate in a single frame
+mm_pix = 0.0756        # From paper, mm to pixel conversion
+FR = 258e3                 # Camera frame rate in Hz
+dt = 1/FR                     # Time step between frames
+prop_speed = 825       # A priori estimate of propagation speed, m/s
+pro_speed_pix_frame = prop_speed * dt * 1/(mm_pix*1e-3)  # Computed number of pixels traveled between frames
 
 
 if not second_mode and not turb:
@@ -766,6 +770,8 @@ use_post_process = 1        # 1 to use windowing post process, 0 if not
 if N_frames == -1:
     N_frames = N_img
 
+print(f'Classifying {N_frames} images (this may take a while)...')
+
 ### Iterate over all frames in the video
 for i_iter in range(N_frames): #range(N_img) can be changed to a range(#) for shorter loops for troubleshooting
     
@@ -1097,18 +1103,25 @@ if second_mode and turb:
 
 max_i_loop = 0
 cls_his = preserve_classification_history.copy()
+first_turb_frame = True
+store_loc = [] #store relevent slices to add boxes to later 
 
-if second_mode and turb: 
+if second_mode and turb:
     for i_iter in range(N_frames-1,0,-1): #goes through frames backwards; stops before first image
+        if first_turb_frame == False:
+            i_iter_record = i_iter + 1
+            break
         for i, _ in enumerate(reversed(Imagelist)): #goes through images starting on the right
             if i <= pro_speed_pix_frame//slice_width-1: #skips the first slice (or multiple if pro. speed is high enough) -- (can't go back in space to check breakdown)
                 continue
-            if (cls_his[i_iter][i])-2 > thres: #if turbulent...
-                from_second_mode = False
+            if (cls_his[i_iter][i])-2 > thres: #if first frame with turbulence
+                store_loc.append([i_iter,i,2]) # 2 is for turbulence
+                first_turb_frame = False #only want propagation that ends in one frame
                 i_loop = 1
                 while cls_his[(i_iter-i_loop)][(i-pro_speed_pix_frame*i_loop//slice_width)]-2 > thres: #check for preceeding turbulence
                     if i-pro_speed_pix_frame*i_loop//slice_width > 0 and i_iter-i_loop>=0: #check to avoid exceeding image bounds and first frame
                         i_loop = i_loop + 1
+                        store_loc.append([i_iter-i_loop,(i-pro_speed_pix_frame*i_loop//slice_width),2]) # 2 is for turbulence
                     else:
                         patience = 0 
                         break
@@ -1117,6 +1130,7 @@ if second_mode and turb:
                     if cls_his[(i_iter-i_loop)][(i-pro_speed_pix_frame*i_loop//slice_width)] == 1:
                         if i-pro_speed_pix_frame*i_loop//slice_width > 0 and i_iter-i_loop>=0: #check to avoid exceeding image bounds and first frame
                             i_loop = i_loop + 1
+                            store_loc.append([i_iter-i_loop,(i-pro_speed_pix_frame*i_loop//slice_width),1]) # 1 is for WP
                         else:
                             break
                         if patience == 1:
@@ -1124,19 +1138,20 @@ if second_mode and turb:
                     else:
                         patience = patience - 1
                 if i_loop > max_i_loop:
-                    max_i_loop = i_loop.copy()
+                    max_i_loop = i_loop
     
-    fig, axs = plt.subplots(max_i_loop)
-    fig.suptitle('Turbulence and Wavepacket Breakdown')
-    for n in range(max_i_loop):
+    fig, axs = plt.subplots(max_i_loop+1)
+    fig.suptitle('Turbulence and Wavepacket Breakdown \n\n Red: NN WP. Orange: NN Turbulence')
+    for n in range(max_i_loop+1):
         axs[n].imshow(whole_image(n,lines),cmap = 'gray')
-        axs[n].set_title(f'Image {stuff}')  #finish the title
-
-    
-'''
-             ax.imshow(imageReconstruct, cmap = 'gray')
-             rect = Rectangle((i*slice_width, 5), slice_width, height-10,
-                                      linewidth=0.5, edgecolor='red', facecolor='none')
-             ax.add_patch(rect)
-             ax.text(i*slice_width+slice_width/5, height+86,f'{prob:.2f}', fontsize = 6)
-             '''
+        axs[n].set_title(f'Image {i_iter_record-max_i_loop+n}')  #finish the title
+    for m,_ in enumerate(store_loc):
+        if store_loc[m][2] == 1:
+            color = 'red'
+        else:
+            color = 'orange'
+        rect = Rectangle((store_loc[m][1]*slice_width, 5), slice_width, height-10,
+                                 linewidth=0.5, edgecolor=color, facecolor='none')
+        axs[store_loc[m][0]-i_iter_record+max_i_loop].add_patch(rect)
+                
+    plt.show()
