@@ -63,13 +63,14 @@ if turb:
 whole_set_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\110000_111000_decimateby1\\Test1\\run33\\video_data.txt"
 
 ne = 20
-plot_flag = 1       # View the images? MUCH SLOWER (view - 1, no images - 0)
+plot_flag = 0      # View the images? MUCH SLOWER (view - 1, no images - 0)
 N_frames = -1      # Number of frames to go through for whole-set
                     # If you want the whole-set -> N_frames = -1
 
 
 if not second_mode and not turb:
     raise ValueError('One or both of "second_mode" and "turb" must be true')
+    
 
 #%% Function calls
 '''
@@ -1015,19 +1016,66 @@ if second_mode and turb:
 #%% More complex breakdown code
 
 #can maybe add code later to do unit propagation speed conversion from m/s or something comparable
-'''
+
+thres = 0.5
 pro_speed_pix_frame = 43 # propagation speed in pixels/frame
+turb_detect_count = 0
+turb_count = 0
+from_count = 0
+dis_trav = []
+preserve_classification_history = classification_history #saves a copy before overwriting later
 
 if second_mode and turb: 
-    ### Iterate over all frames in the video
-    for i_iter in range(N_frames):
-        if i_iter == 0: #skips the first frame -- (can't go back in time to check breakdown)
-            continue
+    #find total number of slices detected as turbulence
+    for i_iter in range(N_frames-1,0,-1):
         for i, _ in enumerate(Imagelist):
+            if (classification_history[i_iter][i])-2 > thres:
+                turb_detect_count = turb_detect_count + 1 
+                
+    #find breakdown stats
+    ### Iterate over all frames in the video
+    for i_iter in range(N_frames-1,0,-1): #goes through frames backwards; stops before first image
+        for i, _ in enumerate(reversed(Imagelist)): #goes through images starting on the right
             if i <= pro_speed_pix_frame//slice_width-1: #skips the first slice (or multiple if pro. speed is high enough) -- (can't go back in space to check breakdown)
                 continue
-            streak = 0
-            if (classification_history[i_iter][i])-2 > 0.5: #if turbulent...
-                if classification_history[(i_iter-1)][(i-pro_speed_pix_frame//slice_width)]: #look back one in time and [] in space to see it a WP preceeded it
-'''               
+            if (classification_history[i_iter][i])-2 > thres: #if turbulent...
+                from_second_mode = False
+                turb_count = turb_count + 1
+                N_loop = 1
+                while classification_history[(i_iter-N_loop)][(i-pro_speed_pix_frame*N_loop//slice_width)]-2 > thres: #check for preceeding turbulence
+                    print('overwritten')
+                    classification_history[(i_iter-N_loop)][(i-pro_speed_pix_frame*N_loop//slice_width)] = 0 #overwrite to 0 to avoid double counting turbulence
+                    if i-pro_speed_pix_frame*N_loop//slice_width > 0 and i_iter-N_loop>=0: #check to avoid exceeding image bounds and first frame
+                        N_loop = N_loop + 1
+                    else:
+                        patience = 0 
+                        break
+                mark = N_loop
+                patience = 2 #gives second chance if WP is not detected the first time
+                while patience >= 1:
+                    if classification_history[(i_iter-N_loop)][(i-pro_speed_pix_frame*N_loop//slice_width)] == 1:
+                        if i-pro_speed_pix_frame*N_loop//slice_width > 0 and i_iter-N_loop>=0: #check to avoid exceeding image bounds and first frame
+                            N_loop = N_loop + 1
+                        else:
+                            break
+                        if patience == 1:
+                            patience = 2 #reset second chance if WP is detected
+                        from_second_mode = True
+                    else:
+                        patience = patience - 1
+                if from_second_mode:
+                    from_count = from_count + 1
+                if N_loop != mark: #checks if turbulence actually came from observed wave packet
+                    dis_trav.append((N_loop-mark)*pro_speed_pix_frame)
+    
+    print(f'Total number of turbulence slices detected: {turb_detect_count}')           
+    print(f'Turbulence count (duplicates overwritten): {turb_count}')
+    print(f'Percentage of turbulence that developed from WPs: {round(from_count/turb_count*100,2)}%')
+    print(f'Mean distance traveled: {round(np.mean(dis_trav),2)} pixels')
+    print(f'Median distance traveled: {round(np.median(dis_trav),2)} pixels')
+    plt.hist(dis_trav)
+    plt.title('Distance WP traveled before breaking down into turbulence')
+    plt.ylabel('Number of WPs')
+    plt.xlabel('Distance traveled (pixels)')
+    plt.show()
     
