@@ -62,16 +62,19 @@ if turb:
     
 whole_set_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\110000_111000_decimateby1\\Test1\\run33\\video_data.txt"
 
+slice_width = 64
 ne = 20
 plot_flag = 0      # View the images? MUCH SLOWER (view - 1, no images - 0)
 N_frames = -1      # Number of frames to go through for whole-set
                     # If you want the whole-set -> N_frames = -1
 
+pro_speed_pix_frame = 43 # propagation speed in pixels/frame
+
+
 
 if not second_mode and not turb:
     raise ValueError('One or both of "second_mode" and "turb" must be true')
     
-
 #%% Function calls
 '''
 Function calls used throughout the script.
@@ -145,7 +148,7 @@ def calc_windowed_confid(j, confidence, window_size):
     return local_confid
 
 # Split the image into 20 pieces
-def image_splitting(i, lines):
+def image_splitting(i, lines, slice_width):
     WP_io = []
     #SM_bounds_Array = []
     Imagelist = []
@@ -173,7 +176,6 @@ def image_splitting(i, lines):
     #    print(f"Skipping image at line {i+1} — unexpected size {full_image.shape}")
         #continue
     
-    slice_width = 64
     height, width = full_image.shape
     num_slices = width // slice_width
     
@@ -205,6 +207,21 @@ def image_splitting(i, lines):
                 WP_io.append(0)
                 
     return Imagelist, WP_io, slice_width, height, sm_bounds
+
+def whole_image(i, lines):
+    curr_line = i;
+    line = lines[curr_line]
+    
+    parts = line.strip().split()
+    
+    image_size = list(map(int, parts[6:8]))  # Convert image size to integers
+    image_data = list(map(float, parts[8:]))  # Convert image data to floats
+    
+    # Reshape the image data into the specified image size
+    full_image = np.array(image_data).astype(np.float64)
+    full_image = full_image.reshape(image_size)  # Reshape to (rows, columns)
+    
+    return full_image
 
 def classify_the_images(model, resnet_model, Imagelist):
         Imagelist_resized = np.array([img_preprocess(img) for img in Imagelist])
@@ -307,7 +324,7 @@ def moving_average(a, n):
 
 
 
-def write_data(file_name, N_img):
+def write_data(file_name, N_img, slice_width):
     '''
     Pass in file_name and N_img
     Reads and splits to arrays
@@ -374,7 +391,6 @@ def write_data(file_name, N_img):
         #    print(f"Skipping image at line {i_sample+1} — unexpected size {full_image.shape}")
         #    continue
         
-        slice_width = 64
         height, width = full_image.shape
         num_slices = width // slice_width
         
@@ -431,9 +447,9 @@ def write_data(file_name, N_img):
 
 #%% Split the test and train images
 if second_mode:
-    trainimgs, testimgs, trainlbs, testlbls, lines_len = write_data(sm_file_name, sm_N_img)
+    trainimgs, testimgs, trainlbs, testlbls, lines_len = write_data(sm_file_name, sm_N_img, slice_width)
 if turb:
-    trainimgs_turb, testimgs_turb, trainlbs_turb, testlbls_turb, lines_len_turb = write_data(turb_file_name, turb_N_img)
+    trainimgs_turb, testimgs_turb, trainlbs_turb, testlbls_turb, lines_len_turb = write_data(turb_file_name, turb_N_img, slice_width)
 
 #%% Train the feature extractor model only
 
@@ -763,7 +779,7 @@ for i_iter in range(N_frames): #range(N_img) can be changed to a range(#) for sh
         model_turb = 0 #useless input to satisfy classify_the_images inputs if not finding turbulence
     
     # Split the image and classify the slices
-    Imagelist, WP_io, slice_width, height, sm_bounds = image_splitting(i_iter, lines)
+    Imagelist, WP_io, slice_width, height, sm_bounds = image_splitting(i_iter, lines, slice_width)
         
     if second_mode:
         simple_class_result, confidence, Imagelist_res = classify_the_images(model, resnet_model, Imagelist)
@@ -1018,7 +1034,6 @@ if second_mode and turb:
 #can maybe add code later to do unit propagation speed conversion from m/s or something comparable
 
 thres = 0.5
-pro_speed_pix_frame = 43 # propagation speed in pixels/frame
 turb_detect_count = 0
 turb_count = 0
 from_count = 0
