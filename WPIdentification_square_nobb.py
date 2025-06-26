@@ -49,23 +49,23 @@ from matplotlib.patches import Rectangle
 
 second_mode = True
 sm_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\wavepacket_labels_combined.txt"
-sm_N_img = 200
+sm_N_img = 50
 if second_mode:
     print('Finding second-mode waves')
 
 #turbulence currently does not do post-processing
 turb = True
 turb_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\Test1\\run33\\turbulence_training_data.txt"
-turb_N_img = 200
+turb_N_img = 50
 if turb:
     print('Finding turbulence')
     
 whole_set_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\110000_111000_decimateby1\\Test1\\run33\\video_data.txt"
 
-slice_width = 64
-ne = 20
+slice_width = 128
+ne = 10
 plot_flag = 0      # View the images? MUCH SLOWER (view - 1, no images - 0)
-N_frames = -1      # Number of frames to go through for whole-set
+N_frames = 200      # Number of frames to go through for whole-set
                     # If you want the whole-set -> N_frames = -1
 
 # Calculate approx how many pixels a wave will propagate in a single frame
@@ -1042,6 +1042,7 @@ turb_detect_count = 0
 turb_count = 0
 from_count = 0
 dis_trav = []
+wait = 2
 preserve_classification_history = classification_history.copy() #saves a deep copy before overwriting later
 #use to reset: classification_history = preserve_classification_history
 
@@ -1062,23 +1063,28 @@ if second_mode and turb:
                 from_second_mode = False
                 turb_count = turb_count + 1
                 i_loop = 1
-                while classification_history[(i_iter-i_loop)][(i-pro_speed_pix_frame*i_loop//slice_width)]-2 > thres: #check for preceeding turbulence
-                    classification_history[(i_iter-i_loop)][(i-pro_speed_pix_frame*i_loop//slice_width)] = 0 #overwrite to 0 to avoid double counting turbulence
-                    if i-pro_speed_pix_frame*i_loop//slice_width > 0 and i_iter-i_loop>=0: #check to avoid exceeding image bounds and first frame
-                        i_loop = i_loop + 1
+                patience = wait #gives additional chance(s) if not detected the first time
+                while patience >= 1:
+                    if classification_history[(i_iter-i_loop)][(i-pro_speed_pix_frame*i_loop//slice_width)]-2 > thres: #check for preceeding turbulence
+                        classification_history[(i_iter-i_loop)][(i-pro_speed_pix_frame*i_loop//slice_width)] = 0 #overwrite to 0 to avoid double counting turbulence
+                        if i-pro_speed_pix_frame*i_loop//slice_width > 0 and i_iter-i_loop>=0: #check to avoid exceeding image bounds and first frame
+                            i_loop = i_loop + 1
+                        else:
+                            patience = 0 
+                            break
+                        if patience < wait:
+                            patience = wait #reset additional chance(s) if WP is detected
                     else:
-                        patience = 0 
-                        break
+                        patience = patience - 1
                 mark = i_loop
-                patience = 2 #gives second chance if WP is not detected the first time
                 while patience >= 1:
                     if classification_history[(i_iter-i_loop)][(i-pro_speed_pix_frame*i_loop//slice_width)] == 1:
                         if i-pro_speed_pix_frame*i_loop//slice_width > 0 and i_iter-i_loop>=0: #check to avoid exceeding image bounds and first frame
                             i_loop = i_loop + 1
                         else:
                             break
-                        if patience == 1:
-                            patience = 2 #reset second chance if WP is detected
+                        if patience < wait:
+                            patience = wait #reset additional chance(s) if WP is detected
                         from_second_mode = True
                     else:
                         patience = patience - 1
@@ -1118,14 +1124,20 @@ if second_mode and turb:
                 store_loc.append([i_iter,i,2]) # 2 is for turbulence
                 first_turb_frame = False #only want propagation that ends in one frame
                 i_loop = 1
-                while cls_his[(i_iter-i_loop)][(i-pro_speed_pix_frame*i_loop//slice_width)]-2 > thres: #check for preceeding turbulence
-                    if i-pro_speed_pix_frame*i_loop//slice_width > 0 and i_iter-i_loop>=0: #check to avoid exceeding image bounds and first frame
-                        i_loop = i_loop + 1
-                        store_loc.append([i_iter-i_loop,(i-pro_speed_pix_frame*i_loop//slice_width),2]) # 2 is for turbulence
+                patience = wait #gives additional chance(s) if not detected the first time
+                while patience >= 1:
+                    if classification_history[(i_iter-i_loop)][(i-pro_speed_pix_frame*i_loop//slice_width)]-2 > thres: #check for preceeding turbulence
+                        classification_history[(i_iter-i_loop)][(i-pro_speed_pix_frame*i_loop//slice_width)] = 0 #overwrite to 0 to avoid double counting turbulence
+                        if i-pro_speed_pix_frame*i_loop//slice_width > 0 and i_iter-i_loop>=0: #check to avoid exceeding image bounds and first frame
+                            i_loop = i_loop + 1
+                            store_loc.append([i_iter-i_loop,(i-pro_speed_pix_frame*i_loop//slice_width),2]) # 2 is for turbulence
+                        else:
+                            patience = 0 
+                            break
+                        if patience < wait:
+                            patience = wait #reset additional chance(s) if WP is detected
                     else:
-                        patience = 0 
-                        break
-                patience = 2 #gives second chance if WP is not detected the first time
+                        patience = patience - 1
                 while patience >= 1:
                     if cls_his[(i_iter-i_loop)][(i-pro_speed_pix_frame*i_loop//slice_width)] == 1:
                         if i-pro_speed_pix_frame*i_loop//slice_width > 0 and i_iter-i_loop>=0: #check to avoid exceeding image bounds and first frame
@@ -1134,7 +1146,7 @@ if second_mode and turb:
                         else:
                             break
                         if patience == 1:
-                            patience = 2 #reset second chance if WP is detected
+                            patience = wait #reset additional chance(s) if WP is detected
                     else:
                         patience = patience - 1
                 if i_loop > max_i_loop:
