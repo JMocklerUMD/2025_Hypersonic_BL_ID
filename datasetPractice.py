@@ -157,7 +157,6 @@ def img_preprocess(input_image):
     return processed_image
 
 def augment_img(image, label):
-    # Random contrast between 0.8x and 1.2x (you can tweak this)
     image = tf.image.random_brightness(image, max_delta=0.1)
     return image, label
 #%% Input files and run settings

@@ -58,6 +58,7 @@ if N_positive_cls >= 6:
 
 ne = 5             # Number of epoches
 slice_width = 96
+thres = 0.5        # Threshold for classifying an individual slice
 
 whole_set_file_name = ''
 plot_flag = 1       # View the images? MUCH SLOWER (view - 1, no images - 0)
@@ -69,21 +70,6 @@ if N_positive_cls < 1 and  N_positive_cls > 6 and not isinstance(N_positive_cls,
 
 #%% Define functions
 print('Defining functions')
-
-# This function tells our feature extractor to do its thing
-def get_bottleneck_features(model, input_imgs, verbose = 0): #not verbose by default
-    '''
-    Retrives the ResNet50 feature vector
-    INPUTS:  model:      resnet50 Keras model
-             input_imgs: (N, 224, 224, 3) numpy array of (224, 224, 3) images to extract features from       
-    OUTPUTS: featues:   (N, 100352) numpy array of extracted ResNet50 features
-    '''
-    #if input_imgs.shape == (224,224,3): #adds batch dimension for single images
-        #input_imgs = np.expand_dims(input_imgs, axis=0)                # Shape: (1, 224, 224, 3)
-    if verbose == 1:
-        print('Getting Feature Data From ResNet...')
-    features = model.predict(input_imgs, verbose = verbose)
-    return features
 
 def img_preprocess(input_image):
     '''
@@ -174,7 +160,7 @@ def whole_image(i, lines):
     
     return full_image
 
-def write_train_test_data(file_name, N_img, slice_width): #name changed from write_data
+def write_data(file_name, N_img, slice_width): #name changed from write_data
     '''
     Pass in file_name and N_img
     Reads and splits to arrays
@@ -289,24 +275,23 @@ def write_train_test_data(file_name, N_img, slice_width): #name changed from wri
     Imagelist_resized = np.array([img_preprocess(img) for img in Imagelist])
     print("Done Resizing")
     
-    trainimgs, testimgs, trainlbs, testlbs = train_test_split(Imagelist_resized,WP_io, test_size=0.2, random_state=69)
-    
+    trainimgs, tempimgs, trainlbs, templbs = train_test_split(Imagelist_resized,WP_io, test_size=0.3, random_state=42)
+    valimgs, testimgs, vallbs, testlbs = train_test_split(tempimgs,templbs, test_size=0.5, random_state=42)
+
     print("Done Splitting")
     
-    return trainimgs, testimgs, trainlbs, testlbs, lines_len
+    return trainimgs, testimgs, valimgs, vallbs, trainlbs, testlbs, lines_len, img_count
 
-def feature_extractor_training(trainimgs, trainlbs, testimgs):
+def feature_extractor_training(train_ds,val_ds,class_weights_dict):
     """
     Building the Resnet50 model: a 256-dense NN is trained on ResNet50 features to classify the images.
     
-    INPUTS: trainimgs:      (N, 224, 224, 3) numpy array of (224, 224, 3) image slices to train the model.
-            trainlbs:       (N,1) numpy array of binary classes
-            testimgs:       (M, 224, 224, 3) numpy array of (224, 224, 3) image slices to test the model.
+    INPUTS: train_ds:       dataset (images and corresponding labels) for training
+            val_ds:         dataset (images and corresponding labels) for validation
     
     OUTPUTS: history:       keras NN model training history object
              model:         trained NN model of JUST the 256 dense NN
-             testimgs_res:  (M, 100532) ResNet50 feature vector for each test image slice
-             ne:            number of epochs trained
+             fe:            number of epochs trained; best epoch if early stopping is enabled
     """
 
     # Bringing in ResNet50 to use as our feature extractor
@@ -320,24 +305,8 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     for layer in resnet_model.layers:
     	layer.trainable = False
     
-    #Defining and training our classification NN: after passing through resnet50,
-    #images are then passed through this network and classified. 
-    trainimgs_res = get_bottleneck_features(resnet_model, trainimgs, verbose=1)
-    testimgs_res = get_bottleneck_features(resnet_model, testimgs, verbose=1)
-    
     # Generate an input shape for our classification layers
     input_shape = resnet_model.output_shape[1]
-    
-    # Get unique classes and compute weights
-    class_weights = class_weight.compute_class_weight(
-        class_weight='balanced',
-        classes=np.unique(trainlbs),
-        y=trainlbs
-        )
-    
-    # Convert to dictionary format required by Keras
-    class_weights_dict = dict(enumerate(class_weights))
-    print("Class weights:", class_weights_dict)
     
     # Added the classification layers
     model = Sequential()
@@ -359,7 +328,7 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     # Inspect the resulting model
     model.summary()
     
-    '''
+    '''If early stopping is added - return best epoch number
     early_stopping = tf.keras.callbacks.EarlyStopping(
                                     monitor='val_accuracy',
                                     min_delta=0,
@@ -371,8 +340,8 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     
     # Train the model! Takes about 20 sec/epoch
     batch_size = 16
-    history = model.fit(trainimgs_res, trainlbs, 
-                        validation_split = 0.25, 
+    history = model.fit(train_ds, 
+                        validation_data = val_ds, 
                         epochs = ne, 
                         verbose = 1,
                         batch_size = batch_size,
@@ -381,21 +350,37 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
                         #callbacks = [early_stopping]
                         )
     
+    fe = ne #later if early stopping is added - use this to store the best epoch number
+    
+    
     # Return the results!
     # On this model, we need to return the processed test images for validation 
     # in the later step
-    return history, model, testimgs_res, ne
+    return history, model, fe
 
-def model_stats(ne,history,model,testimgs_res,testlbs,name):
+def compute_class_weights(testlbs):
+    # Get unique classes and compute weights
+    class_weights = class_weight.compute_class_weight(
+        class_weight='balanced',
+        classes=np.unique(trainlbs),
+        y=trainlbs
+        )
+    
+    # Convert to dictionary format required by Keras
+    class_weights_dict = dict(enumerate(class_weights))
+    print("Class weights:", class_weights_dict)
+    return class_weights_dict
+
+def model_stats(fe,history,model,test_ds,name):
     #model.save('ClassifierV1m.h5')
-    epoch_list = list(range(1,ne + 1))
+    epoch_list = list(range(1,fe + 1))
     # Making some plots to show our results
     f, (pl1, pl2) = plt.subplots(1, 2, figsize = (15,4), gridspec_kw = {'wspace': 0.3})
     t = f.suptitle('Neural Network Performance: ' + name, fontsize = 14)
     # Accuracy Plot
     pl1.plot(epoch_list, history.history['accuracy'], label = 'train accuracy')
     pl1.plot(epoch_list, history.history['val_accuracy'], label = 'validation accuracy')
-    pl1.set_xticks(np.arange(0, ne + 1, 5))
+    pl1.set_xticks(np.arange(0, fe + 1, 5))
     pl1.set_xlabel('Epoch')
     pl1.set_ylabel('Accuracy')
     pl1.set_title('Accuracy')
@@ -403,7 +388,7 @@ def model_stats(ne,history,model,testimgs_res,testlbs,name):
     # Loss plot for classification
     pl2.plot(epoch_list, history.history['loss'], label = 'train loss')
     pl2.plot(epoch_list, history.history['val_loss'], label = 'validation loss')
-    pl2.set_xticks(np.arange(0, ne + 1, 5)) 
+    pl2.set_xticks(np.arange(0, fe + 1, 5)) 
     pl2.set_xlabel('Epoch')
     pl2.set_ylabel('Loss')
     pl2.set_title('Classification Loss')
@@ -413,15 +398,15 @@ def model_stats(ne,history,model,testimgs_res,testlbs,name):
     # Implement some statistics
     
     # Check how well we did on the test data!
-    test_res= model.predict(testimgs_res)
-    test_res_binary = np.round(test_res)
+    test_res = model.predict(test_ds)
     
     # build out the components of a confusion matrix
     n00, n01, n10, n11 = 0, 0, 0, 0 
     
+    #work in progress here
+    
     for i, label_true in enumerate(testlbs):
         label_pred = test_res_binary[i]
-        
         if label_true == 0:
             if label_pred == 0:
                 n00 += 1
@@ -481,6 +466,20 @@ def model_stats(ne,history,model,testimgs_res,testlbs,name):
     print(f"True Pos: {n11}, True Neg: {n00}, False Pos: {n01}, False Neg: {n10}")
 #no returns
 
+def make_dataset(images, labels, batch_size=16, shuffle=False, augment_fn=None):
+    ds = tf.data.Dataset.from_tensor_slices((images, labels))
+    if shuffle:
+        ds = ds.shuffle(1024)
+    if augment_fn:
+        ds = ds.map(augment_fn, num_parallel_calls=tf.data.AUTOTUNE)
+    ds = ds.batch(batch_size).prefetch(tf.data.AUTOTUNE)
+    return ds
+
+def augment_image(image, label):
+    image = tf.image.random_contrast(image, lower=0.9, upper=1.1)
+    image = tf.image.random_brightness(image, max_delta=0.1)
+    return image, label
+
 def moving_average(a, n):
     ret = np.cumsum(a, dtype=float)
     ret[n:] = ret[n:] - ret[:-n]
@@ -489,30 +488,35 @@ def moving_average(a, n):
 
 
 #%% Split the test and train images
-trainimgs_hist = []
-testimgs_hist = []
-trainlbs_hist = []
-testlbs_hist = [] 
+
 lines_len_hist = []
+used_img_count_hist = []
 history_hist = []
 model_hist = []
-testimgs_res_hist = []
-ne_hist = []
+fe_hist = []
 
 for n in range(N_positive_cls):
     print(f'Training model for {class_names[n]}')
-    trainimgs, testimgs, trainlbs, testlbs, lines_len = write_train_test_data(file_names[n], N_imgs_list[n], slice_width)
-    history, model, testimgs_res, ne = feature_extractor_training(trainimgs, trainlbs, testimgs)
-    model_stats(ne,history,model,testimgs_res,testlbs,class_names[n])
-    trainimgs_hist.append(trainimgs)
-    testimgs_hist.append(testimgs)
-    trainlbs_hist.append(trainlbs)
-    testlbs_hist.append(testlbs)
+    trainimgs, testimgs, valimgs, vallbs, trainlbs, testlbs, lines_len, used_img_count = write_data(file_names[n], N_imgs_list[n], slice_width)
+    class_weights_dict = compute_class_weights(trainlbs)
+    train_ds = make_dataset(trainimgs, trainlbs, shuffle=True, augment_fn=augment_image)
+    val_ds   = make_dataset(valimgs, vallbs)
+    test_ds  = make_dataset(testimgs, testlbs)
+    history, model, fe = feature_extractor_training(train_ds,val_ds,class_weights_dict)
+
+    
+
     lines_len_hist.append(lines_len)
     history_hist.append(history)
     model_hist.append(model)
-    testimgs_res_hist.append(testimgs_res)
-    ne_hist.append(ne)      # some of this saving might be unnecessary
+    fe_hist.append(fe)      # some of this saving might be unnecessary
+    
+    #working up to here
+    
+    model_stats(fe,history,model,test_ds,class_names[n])
+
+
+    
     
 #%% Save off the model, if desired
 #model_hist[0].save('C:\\Users\\tyler\\Desktop\\NSSSIP25\\TrainedModels\\model123.keras')
