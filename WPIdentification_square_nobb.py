@@ -44,6 +44,8 @@ from sklearn.utils import class_weight
 
 from matplotlib.patches import Rectangle
 
+import copy
+
 #%% Be able to run Second-Mode Wave detection, Turbulence detection, or both 
 #(both defaults to using Second-Mode Wave detection dataset for labeling and whole-set statistics)
 
@@ -61,11 +63,12 @@ if turb:
     print('Finding turbulence')
     
 whole_set_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\110000_111000_decimateby1\\Test1\\run33\\video_data.txt"
+#"C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\110000_111000_decimateby1\\Test1\\run33\\video_data.txt"
 
-slice_width = 128
+slice_width = 96
 ne = 20
 plot_flag = 0      # View the images? MUCH SLOWER (view - 1, no images - 0)
-N_frames = 250      # Number of frames to go through for whole-set
+N_frames = -1      # Number of frames to go through for whole-set
                     # If you want the whole-set -> N_frames = -1
 
 # Calculate approx how many pixels a wave will propagate in a single frame
@@ -188,7 +191,7 @@ def image_splitting(i, lines, slice_width):
         x_max = x_min + box_width
         y_max = y_min + box_height
     
-    for i in range(num_slices-1):
+    for i in range(num_slices):
         x_start = i * slice_width
         x_end = (i + 1) * slice_width
     
@@ -546,62 +549,6 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     return history, model, testimgs_res, ne
 
 #%% Finetuning model code was here
-
-def feature_extractor_fine_tuning(trainimgs, trainlbs, testimgs):
-    """
-    Building the Resnet50 model: a 256-dense NN and the top layers of the ResNet50 model are all trained
-    
-    INPUTS: trainimgs:      (N, 224, 224, 3) numpy array of (224, 224, 3) image slices to train the model.
-            trainlbs:       (N,1) numpy array of binary classes
-            testimgs:       (M, 224, 224, 3) numpy array of (224, 224, 3) image slices to test the model.
-    
-    OUTPUTS: history:       keras NN model training history object
-             model:         trained NN model of JUST the 256 dense NN
-             testimgs_res:  (M, 100532) ResNet50 feature vector for each test image slice
-             ne:            number of epochs trained
-    """
-    # Form the base model
-    base_model = resnet50.ResNet50(include_top = False, weights ='imagenet', input_shape = (224,224,3))
-    inputs = keras.Input(shape=(224,224,3))
-    
-    # Check length of model layers, if desired
-    # print(len(base_model.layers))
-    
-    # Choose which layers to kept frozen or unfrozen
-    for layer in base_model.layers[:155]: # the first 155 layers
-        layer.trainable = False 
-    
-    # Construct the architecture
-    x = inputs                                          # Start with image input
-    x = base_model(x)                                   # pass thru Resnet50
-    x = Flatten()(x)                                    # Flatten (just like above!)
-    x = layers.Dense(256, activation = 'relu')(x)       # Pass thru the dense 256 arch
-    x = layers.Dropout(0.5)(x)                          # Add dropout
-    outputs = layers.Dense(1, activation='sigmoid')(x)  # Final classification layer
-    
-    # Compile and train the model
-    model_FineTune = Model(inputs, outputs)
-    model_FineTune.summary()
-    model_FineTune.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-6), 
-                  loss = 'binary_crossentropy', 
-                  metrics = ['accuracy']) # keep a low learning rate
-    
-    # Perform training. NOTE: takes around 4 min/epoch so be careful!
-    ne = 20
-    batch_size = 16
-    history = model_FineTune.fit(trainimgs, trainlbs, 
-                        validation_split = 0.25, 
-                        epochs = ne, 
-                        verbose = 1,
-                        batch_size = batch_size,
-                        shuffle=True)
-    
-    # Return the results!
-    # On this model, we only need to return the testimages because we're NOT
-    # running them thru the bottleneck first
-    return history, model_FineTune, testimgs, ne
-
-
 #%% Call fcn to train the model!
 if second_mode:
     history, model, testimgs_res, ne = feature_extractor_training(trainimgs, trainlbs, testimgs)
@@ -806,7 +753,7 @@ for i_iter in range(N_frames): #range(N_img) can be changed to a range(#) for sh
         if turb:
             ax.text(-57, height+62,'Turb: ', fontsize = 6)
 
-        
+        '''
         # Add on classification box rectangles
         for i, _ in enumerate(Imagelist):    
             # Add in the classification guess
@@ -823,7 +770,7 @@ for i_iter in range(N_frames): #range(N_img) can be changed to a range(#) for sh
             if second_mode:
                 prob = round(confidence[i,0],2)
                 ax.text(i*slice_width+slice_width/5, height+86,f'{prob:.2f}', fontsize = 6)
-            
+            '''
                 
         '''
             # Adds a rectangle for the confidence of classification at every square
@@ -852,7 +799,12 @@ for i_iter in range(N_frames): #range(N_img) can be changed to a range(#) for sh
     if plot_flag == 1:
         # Check if there's even a bounding box in the image
         if sm_bounds[0] == 'X':
-            ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN WP. Orange: NN Turbulence')
+            if second_mode and turb:
+                ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN WP. Orange: NN Turbulence')
+            elif second_mode:
+                ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN WP')
+            else:
+                ax.set_title('Image '+str(i_iter)+'. Blue: Labeled Turbulence')
             plt.show()
             continue
         else:
@@ -863,7 +815,7 @@ for i_iter in range(N_frames): #range(N_img) can be changed to a range(#) for sh
             elif second_mode:
                 ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN WP')
             else:
-                ax.set_title('Image '+str(i_iter)+'. Blue: true Turbulence. Orange: NN Turbulence')
+                ax.set_title('Image '+str(i_iter)+'. Blue: Labeled Turbulence')
             plt.show()
 
 print('Done classifying the video!')
@@ -1006,12 +958,20 @@ def whole_set_stats(Imagelist,acc_history,TP_history,TN_history,FP_history,FN_hi
     plt.show()
 
 #%% Run whole-set stats
-if second_mode:
-    print('Whole-set stats based on Second-mode Waves')
-    whole_set_stats(Imagelist,acc_history,TP_history,TN_history,FP_history,FN_history)
+sum1=0
+for n,_ in enumerate(WP_io_history):
+   sum1+=sum(WP_io_history[n])
+   
+if sum1 !=0: #checks to see if bounding boxes exist
+    if second_mode:
+        print('Whole-set stats based on Second-mode Waves')
+        whole_set_stats(Imagelist,acc_history,TP_history,TN_history,FP_history,FN_history)
+    else:
+        print('Whole-set stats based on Turbulence')
+        whole_set_stats(Imagelist,acc_history,TP_history,TN_history,FP_history,FN_history)
 else:
-    print('Whole-set stats based on Turbulence')
-    whole_set_stats(Imagelist,acc_history,TP_history,TN_history,FP_history,FN_history)
+    print('Sum of WP_io_history == 0')
+    print('Implies that whole-set data has no bounding boxes')
 
 #%% Simple breakdown code
 # if a slice is turbulence check if the slice before it in the previous frame was a WP
@@ -1043,8 +1003,9 @@ turb_count = 0
 from_count = 0
 dis_trav = []
 wait = 2
-preserve_classification_history = classification_history.copy() #saves a deep copy before overwriting later
-#use to reset: classification_history = preserve_classification_history.copy()
+preserve_classification_history = copy.deepcopy(classification_history) #saves a deep copy before overwriting later
+#%%
+#use to reset: classification_history = copy.deepcopy(preserve_classification_history)
 
 if second_mode and turb: 
     #find total number of slices detected as turbulence
@@ -1056,6 +1017,7 @@ if second_mode and turb:
     #find breakdown stats
     ### Iterate over all frames in the video
     for i_iter in range(N_frames-1,0,-1): #goes through frames backwards; stops before first image
+        overwrite = []
         for i, _ in enumerate(reversed(Imagelist)): #goes through images starting on the right
             if i <= pro_speed_pix_frame//slice_width-1: #skips the first slice (or multiple if pro. speed is high enough) -- (can't go back in space to check breakdown)
                 continue
@@ -1066,7 +1028,8 @@ if second_mode and turb:
                 patience = wait #gives additional chance(s) if not detected the first time
                 while patience >= 1:
                     if classification_history[(i_iter-i_loop)][int(i-pro_speed_pix_frame*i_loop//slice_width)]-2 > thres: #check for preceeding turbulence
-                        classification_history[(i_iter-i_loop)][int(i-pro_speed_pix_frame*i_loop//slice_width)] = 0 #overwrite to 0 to avoid double counting turbulence
+                        #classification_history[(i_iter-i_loop)][int(i-pro_speed_pix_frame*i_loop//slice_width)] = 0 #overwrite to 0 to avoid double counting turbulence
+                        overwrite.append([i_iter-i_loop, int(i-pro_speed_pix_frame*i_loop//slice_width)])
                         if i-pro_speed_pix_frame*i_loop//slice_width > 0 and i_iter-i_loop>=0: #check to avoid exceeding image bounds and first frame
                             i_loop = i_loop + 1
                         else:
@@ -1078,6 +1041,9 @@ if second_mode and turb:
                         break
                     else:
                         patience = patience - 1
+                        i_loop = i_loop + 1
+                if patience<wait: #don't count additional chance(s) that found nothing
+                    i_loop = i_loop+patience-wait
                 mark = i_loop
                 patience = wait
                 while patience >= 1:
@@ -1091,16 +1057,21 @@ if second_mode and turb:
                         from_second_mode = True
                     else:
                         patience = patience - 1
+                        i_loop = i_loop + 1
+                if patience<wait: #don't count additional chance(s) that found nothing
+                    i_loop = i_loop+patience-wait
                 if from_second_mode:
                     from_count = from_count + 1
                 if i_loop != mark: #checks if turbulence actually came from observed wave packet
                     dis_trav.append((i_loop-mark)*pro_speed_pix_frame)
+        for n_i, n_iter in overwrite: #over write at the end of the loop to protect overlaps
+            classification_history[(n_i)][n_iter] = 0
     
     print(f'Total number of turbulence slices detected: {turb_detect_count}')           
     print(f'Turbulence count (duplicates overwritten): {turb_count}')
     if turb_detect_count == turb_count:
         print('If above are equal, duplicates have likely already been removed or dataset is too small or laminar')
-    print(f'Percentage of turbulence that developed from WPs: {round(from_count/turb_count*100,2)}%')
+    print(f'Percentage of turbulence that were observed to develop from WPs: {round(from_count/turb_count*100,2)}%')
     print(f'Mean distance traveled: {round(np.mean(dis_trav),2)} pixels')
     print(f'Median distance traveled: {round(np.median(dis_trav),2)} pixels')
     plt.hist(dis_trav)
@@ -1112,7 +1083,7 @@ if second_mode and turb:
 #%% Breakdown visualization
 
 max_i_loop = 0
-cls_his = preserve_classification_history.copy()
+cls_his = copy.deepcopy(preserve_classification_history)
 first_turb_frame = True
 store_loc = [] #store relevent slices to add boxes to later 
 
@@ -1123,6 +1094,7 @@ if second_mode and turb:
             break
         else:
             store_loc = [] #clears if turbulence did not come from wavepacket
+        overwrite = []
         for i, _ in enumerate(reversed(Imagelist)): #goes through images starting on the right
             if i <= pro_speed_pix_frame//slice_width-1: #skips the first slice (or multiple if pro. speed is high enough) -- (can't go back in space to check breakdown)
                 continue
@@ -1132,9 +1104,10 @@ if second_mode and turb:
                 patience = wait #gives additional chance(s) if not detected the first time
                 while patience >= 1:
                     if cls_his[(i_iter-i_loop)][int(i-pro_speed_pix_frame*i_loop//slice_width)]-2 > thres: #check for preceeding turbulence
-                        cls_his[(i_iter-i_loop)][int(i-pro_speed_pix_frame*i_loop//slice_width)] = 0 #overwrite to 0 to avoid double counting turbulence
+                        overwrite.append([i_iter-i_loop, int(i-pro_speed_pix_frame*i_loop//slice_width)])
                         if i-pro_speed_pix_frame*i_loop//slice_width > 0 and i_iter-i_loop>=0: #check to avoid exceeding image bounds and first frame
                             store_loc.append([i_iter-i_loop,int(i-pro_speed_pix_frame*i_loop//slice_width),2]) # 2 is for turbulence
+                            i_loop = i_loop + 1
                         else:
                             patience = 0 
                             break
@@ -1144,6 +1117,9 @@ if second_mode and turb:
                         break
                     else:
                         patience = patience - 1
+                        i_loop = i_loop + 1
+                if patience<wait: #don't count additional chance(s) that found nothing
+                    i_loop = i_loop+patience-wait
                 patience = wait #gives additional chance(s) if not detected the first time
                 while patience >= 1:
                     if cls_his[(i_iter-i_loop)][int(i-pro_speed_pix_frame*i_loop//slice_width)] == 1:
@@ -1153,13 +1129,17 @@ if second_mode and turb:
                             store_loc.append([i_iter-i_loop,int(i-pro_speed_pix_frame*i_loop//slice_width),1]) # 1 is for WP
                         else:
                             break
-                        if patience == 1:
+                        if patience < wait:
                             patience = wait #reset additional chance(s) if WP is detected
                     else:
                         patience = patience - 1
                         i_loop = i_loop + 1
+                if patience<wait: #don't count additional chance(s) that found nothing
+                    i_loop = i_loop+patience-wait
                 if i_loop > max_i_loop:
                     max_i_loop = i_loop
+        for n_i, n_iter in overwrite: #over write at the end of the loop to protect overlaps
+            classification_history[(n_i)][n_iter] = 0
     
     fig, axs = plt.subplots(max_i_loop+1)
     fig.suptitle(f'Turbulence and Wavepacket Breakdown\n Red: NN WP. Orange: NN Turbulence\nImages {i_iter_record-max_i_loop} to {i_iter_record}')
