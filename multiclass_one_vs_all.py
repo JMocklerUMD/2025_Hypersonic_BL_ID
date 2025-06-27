@@ -32,13 +32,13 @@ class_names = []
 N_imgs_list = []   # number of images to use for training and testing
 
 if N_positive_cls >= 1:
-    file_names.append('')
-    class_names.append('')
-    N_imgs_list.append(200) 
+    file_names.append("C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\wavepacket_labels_combined.txt")
+    class_names.append('Second-mode Wave Packets')
+    N_imgs_list.append(20) 
 if N_positive_cls >= 2:
-    file_names.append('')
-    class_names.append('')
-    N_imgs_list.append(200)
+    file_names.append("C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\Test1\\run33\\turbulence_training_data.txt")
+    class_names.append('Turbulence')
+    N_imgs_list.append(20)
 if N_positive_cls >= 3:
     file_names.append('')
     class_names.append('')
@@ -56,7 +56,7 @@ if N_positive_cls >= 6:
     class_names.append('')
     N_imgs_list.append(200)
 
-ne = 20             # Number of epoches
+ne = 5             # Number of epoches
 slice_width = 96
 
 whole_set_file_name = ''
@@ -313,11 +313,11 @@ def write_train_test_data(file_name, N_img, slice_width): #name changed from wri
     Imagelist_resized = np.array([img_preprocess(img) for img in Imagelist])
     print("Done Resizing")
     
-    trainimgs, testimgs, trainlbs, testlbls = train_test_split(Imagelist_resized,WP_io, test_size=0.2, random_state=69)
+    trainimgs, testimgs, trainlbs, testlbs = train_test_split(Imagelist_resized,WP_io, test_size=0.2, random_state=69)
     
     print("Done Splitting")
     
-    return trainimgs, testimgs, trainlbs, testlbls, lines_len
+    return trainimgs, testimgs, trainlbs, testlbs, lines_len
 
 def feature_extractor_training(trainimgs, trainlbs, testimgs):
     """
@@ -410,7 +410,7 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     # in the later step
     return history, model, testimgs_res, ne
 
-def model_stats(ne,history,model,testimgs_res,testlbls,name):
+def model_stats(ne,history,model,testimgs_res,testlbs,name):
     #model.save('ClassifierV1m.h5')
     epoch_list = list(range(1,ne + 1))
     # Making some plots to show our results
@@ -443,7 +443,7 @@ def model_stats(ne,history,model,testimgs_res,testlbls,name):
     # build out the components of a confusion matrix
     n00, n01, n10, n11 = 0, 0, 0, 0 
     
-    for i, label_true in enumerate(testlbls):
+    for i, label_true in enumerate(testlbs):
         label_pred = test_res_binary[i]
         
         if label_true == 0:
@@ -472,7 +472,7 @@ def model_stats(ne,history,model,testimgs_res,testlbls,name):
     FP = n01
     FN = n10
         
-    acc = (n00 + n11) / len(testlbls) # complete accuracy
+    acc = (n00 + n11) / len(testlbs) # complete accuracy
     Se = n11 / n1 # true positive success rate, recall
     Sp = n00 / n0 # true negative success rate
     Pp = n11 / (n11 + n01) # correct positive cases over all pred positive
@@ -482,11 +482,11 @@ def model_stats(ne,history,model,testimgs_res,testlbls,name):
     
     # Rate comapared to guessing
     # MICE -> 1: perfect classification. -> 0: just guessing
-    A0 = (n0/len(testlbls))**2 + (n1/len(testlbls))**2
+    A0 = (n0/len(testlbs))**2 + (n1/len(testlbs))**2
     MICE = (acc - A0)/(1-A0)   
     
     # Print out the summary statistics
-    ntot = len(testlbls)
+    ntot = len(testlbs)
     print("---------" + name + " Test Results---------")
     print("            Predicted Class         ")
     print("True Class     0        1    Totals ")
@@ -516,23 +516,22 @@ def moving_average(a, n):
 trainimgs_hist = []
 testimgs_hist = []
 trainlbs_hist = []
-testlbs = [] 
+testlbs_hist = [] 
 lines_len_hist = []
 history_hist = []
 model_hist = []
 testimgs_res_hist = []
 ne_hist = []
 
-print('Training the models:')
-
 for n in range(N_positive_cls):
-    trainimgs, testimgs, trainlbs, testlbls, lines_len = write_train_test_data(file_names[n], N_imgs_list[n], slice_width)
+    print(f'Training model for {class_names[n]}')
+    trainimgs, testimgs, trainlbs, testlbs, lines_len = write_train_test_data(file_names[n], N_imgs_list[n], slice_width)
     history, model, testimgs_res, ne = feature_extractor_training(trainimgs, trainlbs, testimgs)
     model_stats(ne,history,model,testimgs_res,testlbs,class_names[n])
     trainimgs_hist.append(trainimgs)
     testimgs_hist.append(testimgs)
     trainlbs_hist.append(trainlbs)
-    testlbs.append(testlbs)
+    testlbs_hist.append(testlbs)
     lines_len_hist.append(lines_len)
     history_hist.append(history)
     model_hist.append(model)
