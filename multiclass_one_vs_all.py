@@ -70,30 +70,6 @@ if N_positive_cls < 1 and  N_positive_cls > 6 and not isinstance(N_positive_cls,
 #%% Define functions
 print('Defining functions')
 
-def Shuffler(list1, list2):
-	n1 = list1
-	n2 = list2
-	a = []
-	for i in range(0,len(n1)):
-		temp = [n1[i],n2[i]]
-		a.append(temp)
-	random.shuffle(a)
-	n1new = []
-	n2new = []
-	for i in range(0,len(a)):
-		n1new.append(a[i][0])
-		n2new.append(a[i][1])
-
-	return n1new, n2new
-
-def progress_bar(iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '>', printEnd = "\r"):
-	percent = ("{0:." + str(decimals) + "f}").format(100*(iteration/float(total)))
-	filledLength = int(length*iteration//total)
-	bar = fill*filledLength + '-'*(length - filledLength)
-	print('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix), end = printEnd)
-	if iteration == total:
-		print()
-        
 # This function tells our feature extractor to do its thing
 def get_bottleneck_features(model, input_imgs, verbose = 0): #not verbose by default
     '''
@@ -275,7 +251,7 @@ def write_train_test_data(file_name, N_img, slice_width): #name changed from wri
             x_max = x_min + box_width
             y_max = y_min + box_height
         
-        for i in range(num_slices-1):
+        for i in range(num_slices):
             x_start = i * slice_width
             x_end = (i + 1) * slice_width
         
