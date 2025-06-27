@@ -239,11 +239,11 @@ def classify_the_images(model, resnet_model, Imagelist, verbose=0): #not verbose
         return classification_result, test_res, Imagelist_res
 
 
-def classify_the_frame(Imagelist,WP_io, confidence, window_size, indiv_thres, model_turb,Imagelist_res):
+def classify_the_frame(Imagelist,WP_io, confidence, window_size, indiv_thres, model_turb,Imagelist_res,i_iter, lines, slice_width):
     n00, n01, n10, n11 = 0, 0, 0, 0 
     filtered_result = []
     classification_result = np.zeros(len(Imagelist))
-    
+        
     if second_mode:
         for i, _ in enumerate(Imagelist):
             # If using the windowed post processing, call the windowing fcn
@@ -738,7 +738,7 @@ for i_iter in range(N_frames): #range(N_img) can be changed to a range(#) for sh
         simple_class_result, confidence, Imagelist_res = classify_the_images(model_turb, resnet_model, Imagelist)
         
     # Analyze and filter the image results
-    classification_result, filtered_result, n00, n01, n10, n11 = classify_the_frame(Imagelist,WP_io, confidence, window_size, indiv_thres,model_turb,Imagelist_res)
+    classification_result, filtered_result, n00, n01, n10, n11 = classify_the_frame(Imagelist,WP_io, confidence, window_size, indiv_thres,model_turb,Imagelist_res,i_iter, lines, slice_width)
     
     
     ### Restitch and display the classification results
@@ -1071,7 +1071,7 @@ if second_mode and turb:
     print(f'Turbulence count (duplicates overwritten): {turb_count}')
     if turb_detect_count == turb_count:
         print('If above are equal, duplicates have likely already been removed or dataset is too small or laminar')
-    print(f'Percentage of turbulence that were observed to develop from WPs: {round(from_count/turb_count*100,2)}%')
+    print(f'Percentage of turbulence observed to develop from WPs: {round(from_count/turb_count*100,2)}%')
     print(f'Mean distance traveled: {round(np.mean(dis_trav),2)} pixels')
     print(f'Median distance traveled: {round(np.median(dis_trav),2)} pixels')
     plt.hist(dis_trav)
