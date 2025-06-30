@@ -721,7 +721,7 @@ if N_frames == -1:
 print(f'Classifying {N_frames} images (this may take a while)...')
 
 ### Iterate over all frames in the video
-for i_iter in range(N_frames): #range(N_img) can be changed to a range(#) for shorter loops for troubleshooting
+for i_iter in range(N_frames):
     
     ### Perform the classification
     
@@ -754,7 +754,7 @@ for i_iter in range(N_frames): #range(N_img) can be changed to a range(#) for sh
         if turb:
             ax.text(-57, height+62,'Turb: ', fontsize = 6)
 
-        '''
+        
         # Add on classification box rectangles
         for i, _ in enumerate(Imagelist):    
             # Add in the classification guess
@@ -771,7 +771,7 @@ for i_iter in range(N_frames): #range(N_img) can be changed to a range(#) for sh
             if second_mode:
                 prob = round(confidence[i,0],2)
                 ax.text(i*slice_width+slice_width/5, height+86,f'{prob:.2f}', fontsize = 6)
-            '''
+            
                 
         '''
             # Adds a rectangle for the confidence of classification at every square
