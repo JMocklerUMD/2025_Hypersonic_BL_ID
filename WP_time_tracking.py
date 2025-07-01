@@ -1,15 +1,19 @@
 # -*- coding: utf-8 -*-
 """
-Created on Wed Jun 25 09:36:27 2025
-
-@author: Joseph Mockler
+DATE:           Wed Jun 25 09:36:27 2025
+AUTHOR:         Joseph Mockler
+DESCRPITION:    This script takes raw classification results and first filters 
+                them for coherence in both time and space. Then, the script 
+                reconstruct the signal between frames and performs a correlation
+                -based analysis to compute the 2nd mode wave packet convection
+                speed inside the boundary layer. Method works best in 1D, but
+                can also work in 2D (with both scripts provided)
 """
 
 import matplotlib.pyplot as plt
 from scipy import signal
 import numpy as np
 import os
-
 
 
 #%% Load classification results + video
@@ -145,7 +149,7 @@ def classify_the_frame(Imagelist, confidence, WP_io, window_size, indiv_thres, c
                 
     return classification_result, filtered_result, n00, n01, n10, n11
 
-#%% Filter the ID's in time
+#%% Filter the ID's in time and space
 
 window_size = 3
 confid_thres = 1.5
@@ -157,6 +161,8 @@ for i in range(1995):
     # Start by classifying i'th frame
     Imagelist, WP_io, slice_width, height, sm_bounds = image_splitting(i, lines)
     confidence = Confidence_history[i]
+    
+    # Filtered result includes the filtering in space
     classification_result, filtered_result, n00, n01, n10, n11 = classify_the_frame(Imagelist, confidence, WP_io, window_size, indiv_thres, confid_thres, use_post_process)
     
     # Perform a "lookahead" of the next 3 frames
@@ -207,23 +213,82 @@ for i in range(1995):
     WP_locs_list.append([start_slice, stop_slice])        
     
     # Print and inspect if you want
-    #print(f"Frame {i}: WP_loc = [{start_slice}, {stop_slice}]")          
+    # print(f"Frame {i}: WP_loc = [{start_slice}, {stop_slice}]")          
     
     
-#%% Try the correlation thing
+#%% Perform 1D propagation analysis via correlation - necessary fcns
+
+def subpixel_convection_speed(lags, corr, window_polyfit):
+    # Find the max points
+    corr_idx = np.argmax(corr) # Note that corrmax and lagmax share the same idx
+    # lag_max = lags[np.argmax(corr)]
+    
+    # Pick range to fit the 2nd order curve over
+    lag_chopped = lags[corr_idx-window_polyfit:corr_idx+window_polyfit]
+    corr_chopped = corr[corr_idx-window_polyfit:corr_idx+window_polyfit]
+    
+    # Perform the fit and find the maximum
+    pfit = np.polyfit(lag_chopped, corr_chopped, 2)
+    subpix_convect = pfit[1]/(2*pfit[0])
+    
+    return subpix_convect
+
+def correlate_1D_signals(signal1, signal2):
+    lags = signal.correlation_lags(len(signal1), len(signal2))
+    corr = signal.correlate(signal1, signal2)
+    return lags, corr
+
+def plot_reconstructed_signals(line1, recreated_signals, line2):
+    line125 = recreated_signals[0,:]
+    line150 = recreated_signals[1,:]
+    line175 = recreated_signals[2,:]
+
+    fig, (ax1, ax2, ax3, ax4) = plt.subplots(4,1, figsize = (15,12))
+    ax1.plot(range(len(line1)), line1)
+    ax1.plot(range(len(line125)), line125)
+    ax1.set_ylim(-0.25, 0.25)
+    ax2.plot(range(len(line125)), line125)
+    ax2.plot(range(len(line150)), line150)
+    ax2.set_ylim(-0.25, 0.25)
+    ax3.plot(range(len(line150)), line150)
+    ax3.plot(range(len(line175)), line175)
+    ax3.set_ylim(-0.25, 0.25)
+    ax4.plot(range(len(line175)), line175)
+    ax4.plot(range(len(line2)), line2)
+    ax4.set_ylim(-0.25, 0.25)
+    plt.show()
+    
+def plot_analyzed_frames(imageReconstruct1, row_search, imageReconstruct2):
+    # Plot the image
+    fig, (ax_orig, ax_template) = plt.subplots(2, 1, figsize=(15, 6))
+    ax_orig.imshow(imageReconstruct1, cmap='gray')
+    ax_orig.set_title('Frame 1')
+    ax_orig.axhline(y=row_search, color='r', linestyle='-')
+    ax_orig.set_axis_off()
+    ax_template.imshow(imageReconstruct2, cmap='gray')
+    ax_template.set_title('Frame 2')
+    ax_template.axhline(y=row_search, color='r', linestyle='-')
+    ax_template.set_axis_off()
+    fig.show()
+    
+#%% Perform 1D propagation analysis via correlation
 
 # First calculate approx how many pixels a wave will propogate in a single frame
 mm_pix = 0.0756         # From paper
 FR = 285e3              # Camera frame rate in Hz
 dt = 1/FR               # time step between frames
-prop_speed = 900      # A priori estimate of propogation speed
+prop_speed = 800        # A priori estimate of propogation speed
 pix_tr = prop_speed * dt * 1/(mm_pix*1e-3)  # Computed number of pixels traveled between frames
 
 # Calculate how much of the buffer we're throwing out and set the number of increments
 cutoff_len = round(pix_tr)
 row_search = 42
-N_interps = 5
+N_interps = 3
 increment = round(pix_tr/(N_interps+1))
+
+# Processing parameters
+window_polyfit = 5      # Window for computing convection speed from polyfit
+signal_buffer = 2       # How much extra "slice" should be kept outside of the localized WP?
 
 # Bandpass filter the frames
 sos = signal.butter(4, [0.0196, 0.1176], btype='bandpass', fs=1, output='sos')
@@ -232,6 +297,7 @@ convect_speed = []
 convect_breakout = []
 for ii in range(1995):
     
+    # Pick which WP frames we should analyze
     if ii == 0:
         convect_breakout.append([])
         continue
@@ -241,12 +307,13 @@ for ii in range(1995):
         convect_breakout.append([])
         continue
     
+    # Extract out the starting and stopping values
     WP_loc_ii = WP_locs_list[ii]
     starting_WP = WP_loc_ii[0]
     stopping_WP = WP_loc_ii[1]
     
-    start_analysis = max(starting_WP - 2, 0)
-    stop_analysis = min(stopping_WP + 2, 18)
+    start_analysis = max(starting_WP - signal_buffer, 0)
+    stop_analysis = min(stopping_WP + signal_buffer, 18)
     
     # Take two frames where we know WP's exist
     Imagelist1, WP_io, slice_width, height, sm_bounds = image_splitting(ii, lines)
@@ -254,41 +321,17 @@ for ii in range(1995):
     imageReconstruct1 = np.hstack(Imagelist1[start_analysis:stop_analysis])     # WP's should be at 10 to 18
     imageReconstruct2 = np.hstack(Imagelist2[start_analysis:stop_analysis])     # WP's should be at 10 to 18
     
-    # Plot the image
-    # fig, (ax_orig, ax_template) = plt.subplots(2, 1, figsize=(15, 6))
-    # ax_orig.imshow(imageReconstruct1, cmap='gray')
-    # ax_orig.set_title('Frame 1')
-    # ax_orig.axhline(y=row_search, color='r', linestyle='-')
-    # ax_orig.set_axis_off()
-    # ax_template.imshow(imageReconstruct2, cmap='gray')
-    # ax_template.set_title('Frame 2')
-    # ax_template.axhline(y=row_search, color='r', linestyle='-')
-    # ax_template.set_axis_off()
-    # fig.show()
-    
     # Take some slices at the boundary layer to perform the correlation
     line1 = imageReconstruct1[row_search,:]
     line2 = imageReconstruct2[row_search,:]
     
-    # fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 7))
-    # ax1.plot(range(len(line1)), line1, 'b-')
-    # ax1.set_title('Frame 1, row 42')
-    # ax2.plot(range(len(line2)), line2, 'b-')
-    # ax2.set_title('Frame 2, row 42')
-       
-    
     # Apply the filter to the signal
-    # sosfiltfilt applies the filter forward and backward to avoid phase distortion
     line1 = signal.sosfiltfilt(sos, line1)
     line2 = signal.sosfiltfilt(sos, line2)
-    
-    # ax1.plot(range(len(line1)), line1, 'k-')
-    # ax2.plot(range(len(line2)), line2, 'k-')
     
     # Now form the signal interpolation based on the a priori propogation speed
     # Need a (N-1) x length array to store the intermediate 
     recreated_signals = np.zeros((N_interps, len(line1[:-cutoff_len])))
-    
     
     for i in range(1,N_interps+1):
         for j in range(len(line1)-cutoff_len):
@@ -297,49 +340,38 @@ for ii in range(1995):
             step_fwd = ((N_interps+1)-i)*increment
             recreated_signals[i-1,j] = (((N_interps+1)-i)*line1[j-step_bwd] + i*line2[j+step_fwd])/(N_interps+1)
     
-    # line125 = recreated_signals[0,:]
-    # line150 = recreated_signals[1,:]
-    # line175 = recreated_signals[2,:]
-
-
-    # fig, (ax1, ax2, ax3, ax4) = plt.subplots(4,1, figsize = (15,12))
-    # ax1.plot(range(len(line1)), line1)
-    # ax1.plot(range(len(line125)), line125)
-    # ax1.set_ylim(-0.25, 0.25)
-    # ax2.plot(range(len(line125)), line125)
-    # ax2.plot(range(len(line150)), line150)
-    # ax2.set_ylim(-0.25, 0.25)
-    # ax3.plot(range(len(line150)), line150)
-    # ax3.plot(range(len(line175)), line175)
-    # ax3.set_ylim(-0.25, 0.25)
-    # ax4.plot(range(len(line175)), line175)
-    # ax4.plot(range(len(line2)), line2)
-    # ax4.set_ylim(-0.25, 0.25)
-    # plt.show()
-    
     # Do the first interpolation
     line1 = line1[:-cutoff_len]
     line2 = line2[:-cutoff_len]
     
-    lags = signal.correlation_lags(len(line1), len(recreated_signals[0,:]))
-    corr = signal.correlate(line1, recreated_signals[0,:])
-    #print(f"t0 to t1 pixel lag {lags[np.argmax(corr)]}. Speed = {lags[np.argmax(corr)]*mm_pix *1e-3 / (dt/(N_interps+1))}")
-    convect_speed.append(lags[np.argmax(corr)])
+    # Compute the cross-correlation
+    lags, corr = correlate_1D_signals(line1, recreated_signals[0,:])
+    
+    # Calculate the convection speed via a correlation analysis
+    subpix_convect = subpixel_convection_speed(lags, corr, window_polyfit)
+    convect_speed.append(subpix_convect)
+    
     # Do the middle ones
     for i in range(N_interps-1):
-        lags = signal.correlation_lags(len(recreated_signals[i,:]), len(recreated_signals[i+1,:]))
-        corr = signal.correlate(recreated_signals[i,:], recreated_signals[i+1,:])
-        #print(f"t0 to t1 pixel lag {lags[np.argmax(corr)]}. Speed = {lags[np.argmax(corr)]*mm_pix *1e-3 / (dt/(N_interps+1))}")
-        convect_speed.append(lags[np.argmax(corr)])
+        # Compute the cross-correlation
+        lags, corr = correlate_1D_signals(recreated_signals[i,:], recreated_signals[i+1,:])
+        
+        # Calculate the convection speed via a correlation analysis
+        subpix_convect = subpixel_convection_speed(lags, corr, window_polyfit)
+        convect_speed.append(subpix_convect)
         
     # Do the final
-    lags = signal.correlation_lags(len(recreated_signals[N_interps-1,:]), len(line2))
-    corr = signal.correlate(recreated_signals[N_interps-1,:], line2)
-    #print(f"t0 to t1 pixel lag {lags[np.argmax(corr)]}. Speed = {lags[np.argmax(corr)]*mm_pix *1e-3 / (dt/(N_interps+1))}")
-    convect_speed.append(lags[np.argmax(corr)])
+    # Compute the cross-correlation
+    lags, corr = correlate_1D_signals(recreated_signals[N_interps-1,:], line2)
+   
+    # Calculate the convection speed via a correlation analysis
+    subpix_convect = subpixel_convection_speed(lags, corr, window_polyfit)
+    convect_speed.append(subpix_convect)
+    
+    # Append to a master list for later analysis
     convect_breakout.append(convect_speed[-(N_interps+1):])
-    #print(f'Frame {ii}. Convection speeds {convect_speed}')
 
+# Perform some basic statistics
 mean_speed = np.mean(convect_speed)*mm_pix *1e-3 / (dt/(N_interps+1))
 std_dev = np.std(convect_speed)*mm_pix *1e-3 / (dt/(N_interps+1))
 
@@ -347,7 +379,15 @@ print(f'Cut numbers: {N_interps}, Row number: {row_search}, Approx prop speed: {
 print(f'Mean: {mean_speed} +/- {std_dev}')
 #print(convect_breakout)
 
-# #%% Data save
+# Form a histogram and inspect the results
+counts, bins = np.histogram(convect_speed)
+fig, ax1 = plt.subplots(1)
+ax1.stairs(counts, bins)
+ax1.set_xlabel('Measured propagation speed, pixels')
+ax1.set_ylabel('Frequency counts')
+plt.show()
+
+#%% Data save
 # convect_900 = convect_speed
 
 # #%% Bar chart of classification results
@@ -368,7 +408,7 @@ print(f'Mean: {mean_speed} +/- {std_dev}')
 # ax4.set_xlim(-8, -5)
 #plt.stairs(counts, bins)
 
-#%%
+#%% correlation plot thing
 # fig, ax = plt.subplots(1)
 # ax.plot(lags, corr)
 # ax.set_ylabel('Computed Correlation')
@@ -376,6 +416,7 @@ print(f'Mean: {mean_speed} +/- {std_dev}')
 # ax.axvline(x=lags[np.argmax(corr)], color='r', linestyle='-')
 # ax.set_xlim(-100,100)
 # plt.show()
+
 
 #%% Analyzing the results to see what's going on
 
@@ -431,64 +472,23 @@ ax2.set_xlabel('WP Classifier Confidence')
 ax2.set_ylabel('Stdev prop speed (pix) between 2 frames')
 plt.show()
 
-#%% misc stuff
-
-
-
-# line125 = recreated_signals[0,:]
-# line150 = recreated_signals[1,:]
-# line175 = recreated_signals[2,:]
-
-
-# fig, (ax1, ax2, ax3, ax4) = plt.subplots(4,1, figsize = (15,12))
-# ax1.plot(range(len(line1)), line1)
-# ax1.plot(range(len(line125)), line125)
-
-# ax2.plot(range(len(line125)), line125)
-# ax2.plot(range(len(line150)), line150)
-
-# ax3.plot(range(len(line150)), line150)
-# ax3.plot(range(len(line175)), line175)
-
-# ax4.plot(range(len(line175)), line175)
-# ax4.plot(range(len(line2)), line2)
-# #ax.set_ylim(0,1)
-# plt.show()
-
-# lags = signal.correlation_lags(len(line1), len(line125))
-# corr1 = signal.correlate(line1, line125)
-# print(lags[np.argmax(corr1)])
-
-# lags = signal.correlation_lags(len(line125), len(line150))
-# corr2 = signal.correlate(line125, line150)
-# print(lags[np.argmax(corr2)])
-
-# lags = signal.correlation_lags(len(line150), len(line175))
-# corr3 = signal.correlate(line150, line175)
-# print(lags[np.argmax(corr3)])
-
-# lags = signal.correlation_lags(len(line175), len(line2))
-# corr4 = signal.correlate(line175, line2)
-# print(lags[np.argmax(corr4)])
-
-
 #%% 2D correlation method
 # First calculate approx how many pixels a wave will propogate in a single frame
 mm_pix = 0.0756         # From paper
 FR = 285e3              # Camera frame rate in Hz
 dt = 1/FR               # time step between frames
-prop_speed = 825     # A priori estimate of propogation speed
+prop_speed = 900        # A priori estimate of propogation speed
 pix_tr = prop_speed * dt * 1/(mm_pix*1e-3)  # Computed number of pixels traveled between frames
 
 # Calculate how much of the buffer we're throwing out and set the number of increments
 cutoff_len = round(pix_tr)
 row_search = 42
-N_interps = 4
+N_interps = 3
 increment = round(pix_tr/(N_interps+1))
 convect_speed = []
 convect_breakout = []
 
-for k in range(1995):
+for k in range(67, 68):
     
     # This stuff just does filtering if we should bother analyzing this frame
     if k == 0:
@@ -510,8 +510,8 @@ for k in range(1995):
     # Take two frames where we know WP's exist
     Imagelist1, WP_io, slice_width, height, sm_bounds = image_splitting(k, lines)
     Imagelist2, WP_io, slice_width, height, sm_bounds = image_splitting(k+1, lines)
-    imageReconstruct1 = np.hstack(Imagelist1[start_analysis:stop_analysis])     # WP's should be at 10 to 18
-    imageReconstruct2 = np.hstack(Imagelist2[start_analysis:stop_analysis])     # WP's should be at 10 to 18
+    imageReconstruct1 = np.hstack(Imagelist1[start_analysis:stop_analysis])     
+    imageReconstruct2 = np.hstack(Imagelist2[start_analysis:stop_analysis])     
     
     row_range, col_range = imageReconstruct1.shape
     
@@ -522,54 +522,66 @@ for k in range(1995):
     
     # Our recreated signals should chop off the front and back bit to avoid
     # any weird clipping I noticed
-    recreated_signals = np.zeros((N_interps, row_range, col_range-2*cutoff_len))
+    recreated_signals = np.zeros((N_interps, row_range, col_range))
     
     # ii forms the intermediate frames
     for ii in range(1,N_interps+1):
         
         # j iterates over the cols (weighted avg is equally applied across the entire col)
-        for j in range(col_range-2*cutoff_len):
+        for j in range(cutoff_len, col_range-cutoff_len):
             # Look backwards i*increment from the
             step_bwd = ii*increment
             step_fwd = ((N_interps+1)-ii)*increment
             recreated_signals[ii-1,:,j] = (((N_interps+1)-ii)*imageReconstruct1[:,j-step_bwd] + ii*imageReconstruct2[:,j+step_fwd])/(N_interps+1)
     
-    
     # Reshape the frames for the cutoff locs we described above
     img1 = imageReconstruct1[:, cutoff_len:-cutoff_len]
     img2 = imageReconstruct2[:, cutoff_len:-cutoff_len]
-
+    recreated_signals = recreated_signals[:,:,cutoff_len:-cutoff_len]
+    
     # Find the first correlation
-    lags2 = signal.correlation_lags(len(img1[1,:]), len(recreated_signals[0,1, cutoff_len:-cutoff_len]), mode = "same")
-    corr2 = signal.correlate2d(img1, recreated_signals[0,:, cutoff_len:-cutoff_len], boundary='symm', mode='same')
+    lags2 = signal.correlation_lags(len(img1[1,:]), len(recreated_signals[0,1, :]), mode = "same")
+    corr2 = signal.correlate2d(img1, recreated_signals[0,:, :], boundary='symm', mode='same')
     # corr2_check = corr2
     row_max, col_max = np.unravel_index(np.argmax(corr2), corr2.shape)
     convect_speed.append(lags2[col_max])
     
     # Do the middle ones
     for i in range(N_interps-1):
-        lags2 = signal.correlation_lags(len(recreated_signals[i,1, cutoff_len:-cutoff_len]), len(recreated_signals[i+1,1, cutoff_len:-cutoff_len]), mode = "same")
-        corr2 = signal.correlate2d(recreated_signals[i,:, cutoff_len:-cutoff_len], recreated_signals[i+1,:, cutoff_len:-cutoff_len], boundary='symm', mode='same')
+        lags2 = signal.correlation_lags(len(recreated_signals[i,1, :]), len(recreated_signals[i+1,1, :]), mode = "same")
+        corr2 = signal.correlate2d(recreated_signals[i,:, :], recreated_signals[i+1,:, :], boundary='symm', mode='same')
         #print(f"t0 to t1 pixel lag {lags[np.argmax(corr)]}. Speed = {lags[np.argmax(corr)]*mm_pix *1e-3 / (dt/(N_interps+1))}")
+        if i == 0:
+            corr2_check= corr2
         row_max, col_max = np.unravel_index(np.argmax(corr2), corr2.shape)
         convect_speed.append(lags2[col_max])
         
     # Do the final
-    lags2 = signal.correlation_lags(len(recreated_signals[N_interps-1,1,cutoff_len:-cutoff_len]), len(img2[1,:]), mode = "same")
-    corr2 = signal.correlate2d(recreated_signals[N_interps-1,:, cutoff_len:-cutoff_len], img2, boundary='symm', mode='same')
+    lags2 = signal.correlation_lags(len(recreated_signals[N_interps-1,1,:]), len(img2[1,:]), mode = "same")
+    corr2 = signal.correlate2d(recreated_signals[N_interps-1,:, :], img2, boundary='symm', mode='same')
     row_max, col_max = np.unravel_index(np.argmax(corr2), corr2.shape)
     convect_speed.append(lags2[col_max])
     
         
-    # fig, (ax1, ax2) = plt.subplots(2,1, figsize = (15,6))
-    # ax1.imshow(img1)
-    # ax2.imshow(img2)
-    # plt.show()
+    fig, (ax1, ax2, ax3, ax4) = plt.subplots(4,1, figsize = (15,10))
+    ax1.imshow(img1, cmap = 'gray')
+    ax1.set_title('Frame 1')
+    ax2.imshow(recreated_signals[0,:,:], cmap = 'gray')
+    ax2.set_title('Frame 1 + 2us')
+    ax3.imshow(img2, cmap = 'gray')
+    ax3.set_title('Frame 2')
+    ax4.imshow(corr2, cmap = 'gray')
+    ax4.set_title('Frame 1 + 2us and Frame 1 correlation')
+    plt.show()
     
-    print(convect_speed[-(N_interps+1):])
+    print(f"Frame: {k}. Measured convection speeds {convect_speed[-(N_interps+1):]}")
     convect_breakout.append(convect_speed[-(N_interps+1):])
 
+mean_speed = np.mean(convect_speed)*mm_pix *1e-3 / (dt/(N_interps+1))
+std_dev = np.std(convect_speed)*mm_pix *1e-3 / (dt/(N_interps+1))
 
+print(f'Cut numbers: {N_interps}, Approx prop speed: {prop_speed}')
+print(f'Mean: {mean_speed} +/- {std_dev}')
 
 # 
 
