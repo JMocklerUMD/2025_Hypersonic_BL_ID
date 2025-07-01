@@ -4,6 +4,7 @@ import os
 import math
 import random
 import copy
+import time
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
@@ -36,7 +37,7 @@ N_imgs_list = []   # number of images to use for training and testing
 if N_positive_cls >= 1:
     file_names.append("C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\wavepacket_labels_combined.txt")
     class_names.append('Second-mode Wave Packets')
-    N_imgs_list.append(50) 
+    N_imgs_list.append(200) 
 if N_positive_cls >= 2:
     file_names.append("C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\Test1\\run33\\turbulence_training_data.txt")
     class_names.append('Turbulence')
@@ -64,12 +65,12 @@ thres = 0.5        # Threshold for classifying an individual slice
 
 use_early_stopping = True
 metric = 'val_accuracy'         #val_loss, val_accuracy, etc
-patience = 2
+patience = 5
 
 augment = False
 
 whole_set_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\110000_111000_decimateby1\\Test1\\run33\\video_data.txt"
-plot_flag = 1       # View the images? MUCH SLOWER (view - 1, no images - 0)
+plot_flag = 0       # View the images? MUCH SLOWER (view - 1, no images - 0)
 N_frames = -1       # Number of frames to go through for whole-set
                     # If you want the whole-set -> N_frames = -1
 
@@ -378,15 +379,15 @@ def feature_extractor_training(train_ds,val_ds,class_weights_dict,use_early_stop
     model.add(Dense(128,                                        # NN dimension            
                     activation = 'relu'                         # Activation function at each node
                     #reg values originally 1e-4
-                    ,kernel_regularizer=regularizers.L1L2(l1=1e-6, l2=1e-6),     # Regularization penality term
-                    bias_regularizer=regularizers.L2(1e-6)                     # Additional regularization penalty term
+                    ,kernel_regularizer=regularizers.L1L2(l1=1e-4, l2=1e-4),     # Regularization penality term
+                    bias_regularizer=regularizers.L2(1e-4)                     # Additional regularization penalty term
                     ))                   
     
     model.add(Dropout(0.5))     # Add dropout to make the system more robust
     model.add(Dense(1, activation = 'sigmoid'))     # Add final classification layer
     
     # Compile the NN
-    model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-4), #originally 1e-6
+    model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-6), #originally 1e-6
                   loss = 'binary_crossentropy', 
                   metrics = ['accuracy'])
     
@@ -407,6 +408,8 @@ def feature_extractor_training(train_ds,val_ds,class_weights_dict,use_early_stop
                                     )
         callbacks.append(early_stopping)
     
+    start = time.time()
+    
     # Train the model!
     history = model.fit(train_ds, 
                         validation_data = val_ds, 
@@ -416,6 +419,9 @@ def feature_extractor_training(train_ds,val_ds,class_weights_dict,use_early_stop
                         class_weight = class_weights_dict,
                         callbacks = callbacks
                         )
+    
+    end = time.time()
+    print(f'Model training time: {end-start} seconds')
     
     if use_early_stopping and early_stopping.stopped_epoch != 0: #second part of conditional checks to see if early stopping actually activiated
         fe = early_stopping.stopped_epoch + 1
@@ -571,10 +577,26 @@ def post_process_time(confidence_history,feature_prop_speed,slice_width,num_slic
         elif n%num_slices < slice_move or n%num_slices > num_slices - slice_move - 2:
             continue #leaves the first and last slices (or more/less with high/low prop speed) alone
         else:
-            confidence = (confidence + confidence_history[int(n-num_slices-slice_move)] + confidence_history[int(n+num_slices+slice_move)]) / 3
+            confidence = (confidence + confidence_history[int(n-num_slices-slice_move)] + confidence_history[int(n+num_slices+slice_move)]) / 2
             processed_conf_hist[n] = confidence
         
     return processed_conf_hist
+
+def calc_windowed_confid(j, confidence_history, window_size,num_slices,i_iter):
+    '''
+    Calculates the local confidence (i.e. a single slice of a frame) 
+    via a summed windowing method
+    '''
+    #offset for indexing
+    os = i_iter * num_slices
+    if (j - window_size//2) < 0: # at the front end of the image
+        local_confid = np.sum(confidence_history[0+os:j+window_size//2+1+os:1+os])
+    elif (j + window_size//2) > num_slices: # at the end of the image list
+        local_confid = np.sum(confidence_history[j-window_size//2-1+os:num_slices+os:1+os])
+    else:
+        local_confid = np.sum(confidence_history[j-window_size//2+os:j+window_size//2+1+os:1+os])
+        
+    return local_confid
 
 def visualize_frames(lines_len,N_frames,num_slices,Imagelist_raw,confidence_history,processed_conf_hist,thres,slice_width):
     if N_frames == -1:
@@ -611,6 +633,7 @@ def visualize_frames(lines_len,N_frames,num_slices,Imagelist_raw,confidence_hist
                     ax2.add_patch(rect)
                 ax1.text(i*slice_width+slice_width/6, height+86,r_confid_hist[i+i_iter*num_slices], fontsize = 6)
                 ax2.text(i*slice_width+slice_width/6, height+86,r_proc_conf_hist[i+i_iter*num_slices], fontsize = 6)
+        fig.suptitle(f'Image {i_iter}')
         plt.show()
     print('Done visualizing the frames')
 
