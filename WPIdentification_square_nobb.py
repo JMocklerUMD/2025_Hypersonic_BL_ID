@@ -9,6 +9,7 @@ import numpy as np
 import os
 import math
 import random
+import time
 
 import keras
 
@@ -56,7 +57,7 @@ if second_mode:
     print('Finding second-mode waves')
 
 #turbulence currently does not do post-processing
-turb = True
+turb = False
 turb_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\Test1\\run33\\turbulence_training_data.txt"
 turb_N_img = 200
 if turb:
@@ -451,12 +452,6 @@ def write_data(file_name, N_img, slice_width):
     
     return trainimgs, testimgs, trainlbs, testlbls, lines_len
 
-#%% Split the test and train images
-if second_mode:
-    trainimgs, testimgs, trainlbs, testlbls, lines_len = write_data(sm_file_name, sm_N_img, slice_width)
-if turb:
-    trainimgs_turb, testimgs_turb, trainlbs_turb, testlbls_turb, lines_len_turb = write_data(turb_file_name, turb_N_img, slice_width)
-
 #%% Train the feature extractor model only
 
 def feature_extractor_training(trainimgs, trainlbs, testimgs):
@@ -549,6 +544,15 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     # in the later step
     return history, model, testimgs_res, ne
 
+#%% Split the test and train images
+start_time = time.time()
+
+if second_mode:
+    trainimgs, testimgs, trainlbs, testlbls, lines_len = write_data(sm_file_name, sm_N_img, slice_width)
+if turb:
+    trainimgs_turb, testimgs_turb, trainlbs_turb, testlbls_turb, lines_len_turb = write_data(turb_file_name, turb_N_img, slice_width)
+
+
 #%% Finetuning model code was here
 #%% Call fcn to train the model!
 if second_mode:
@@ -560,6 +564,8 @@ if turb:
     history_turb, model_turb, testimgs_res_turb, ne_turb = feature_extractor_training(trainimgs_turb, trainlbs_turb, testimgs_turb)
     print("Turbulence Model Training Complete!")
 
+end_time = time.time()
+print(f'Time to read in data, process, and train model: {end_time-start_time} seconds')
 #%% Perform the visualization
 '''
 Visualization: inspect how the training went
