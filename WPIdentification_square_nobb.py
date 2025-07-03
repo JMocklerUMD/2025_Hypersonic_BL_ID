@@ -92,7 +92,11 @@ that can be passed to the keras NN trainer
 print('Reading training data file')
 
 # Write File Name
+<<<<<<< Updated upstream
 file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\training_data_explicit.txt'
+=======
+file_name = 'C:\\Users\\cathe\\OneDrive\\Desktop\\T9_Run4120_normalized.txt'
+>>>>>>> Stashed changes
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()
@@ -130,12 +134,17 @@ for i in range(N_img):
     # Reshape the image data into the specified image size
     full_image = np.array(image_data).astype(np.float64)
     full_image = full_image.reshape(image_size)  # Reshape to (rows, columns)
+
     
+<<<<<<< Updated upstream
     if full_image.shape != (64, 1280):
         print(f"Skipping image at line {i+1} — unexpected size {full_image.shape}")
         continue
     
     slice_width = 64
+=======
+    slice_width = 54
+>>>>>>> Stashed changes
     height, width = full_image.shape
     num_slices = width // slice_width
     
@@ -180,6 +189,15 @@ for i in range(len(Imagelist)):
 Imagelist = [element for i, element in enumerate(Imagelist) if i not in omit_array]
 WP_io = [element for i, element in enumerate(WP_io) if i not in omit_array]
 
+#%% Catches any arrays that are not correct size
+#omit_array = []
+#for i in range(len(Imagelist)):
+#    if Imagelist[i].shape != (64, 64):
+#        omit_array.append(i)
+
+#Imagelist = [element for i, element in enumerate(Imagelist) if i not in omit_array]
+#WP_io = [element for i, element in enumerate(WP_io) if i not in omit_array]
+
 
 #%% Resizes the arrays
 # Imagelist,WP_io = Shuffler(Imagelist, WP_io)
@@ -216,17 +234,91 @@ trainimgs, testimgs, trainlbs, testlbls = train_test_split(Imagelist_resized,WP_
 trainimgs_res = get_bottleneck_features(resnet_model, trainimgs)
 testimgs_res = get_bottleneck_features(resnet_model, testimgs)
 
+<<<<<<< Updated upstream
 #%%
 '''
 Defining and training our classification NN: after passing through resnet50,
 images are then passed through this network and classified. 
 '''
+=======
+def feature_extractor_training(trainimgs, trainlbs, testimgs):
+    """
+    Building the Resnet50 model: images are first passed through the Reset50 model
+    prior to passing through one last NN layer that we will define. Initialize
+    this code block once!
+    """
+>>>>>>> Stashed changes
 
 # If we leave this code block seperate from the others, we can directly
 # change our architecture and view the results
 
+<<<<<<< Updated upstream
 # Generate an input shape for our classification layers
 input_shape = resnet_model.output_shape[1]
+=======
+    # Locking in the weights of the feature detection layers
+    resnet_model.trainable = False
+    for layer in resnet_model.layers:
+    	layer.trainable = False
+    
+    
+    '''
+    Defining and training our classification NN: after passing through resnet50,
+    images are then passed through this network and classified. 
+    '''    
+    trainimgs_res = get_bottleneck_features(resnet_model, trainimgs)
+    testimgs_res = get_bottleneck_features(resnet_model, testimgs)
+    
+    # Generate an input shape for our classification layers
+    input_shape = resnet_model.output_shape[1]
+    
+    # Get unique classes and compute weights
+    class_weights = class_weight.compute_class_weight(
+        class_weight='balanced',
+        classes=np.unique(trainlbs),
+        y=trainlbs
+        )
+    
+    # Convert to dictionary format required by Keras
+    class_weights_dict = dict(enumerate(class_weights))
+    print("Class weights:", class_weights_dict)
+    
+    # Added the classification layers
+    model = Sequential()
+    model.add(InputLayer(input_shape = (input_shape,)))
+    model.add(Dense(256,                                        # NN dimension            
+                    activation = 'relu',                        # Activation function at each node
+                    input_dim = input_shape,                    # Input controlled by feature vect from ResNet50
+                    kernel_regularizer=regularizers.L1L2(l1=1e-4, l2=1e-4),     # Regularization penality term
+                    bias_regularizer=regularizers.L2(1e-4)))                    # Additional regularization penalty term
+    
+    model.add(Dropout(0.5))     # Add dropout to make the system more robust
+    model.add(Dense(1, activation = 'sigmoid'))     # Add final classification layer
+    
+    # Compile the NN
+    model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-6), 
+                  loss = 'binary_crossentropy', 
+                  metrics = ['accuracy'])
+    
+    # Inspect the resulting model
+    model.summary()
+    
+    # Train the model! Takes about 20 sec/epoch
+    ne = 20
+    batch_size = 16
+    history = model.fit(trainimgs_res, trainlbs, 
+                        validation_split = 0.25, 
+                        epochs = ne, 
+                        verbose = 1,
+                        batch_size = batch_size,
+                        shuffle=True,
+                        class_weight = class_weights_dict)
+    
+    # Return the results!
+    # On this model, we need to return the processed test images for validation 
+    # in the later step
+    return history, model, testimgs_res, ne
+>>>>>>> Stashed changes
 
 # Now we'll add new classification layers
 model = Sequential()
@@ -239,10 +331,55 @@ model.add(Dropout(0.5))
 #model.add(Dropout(0.3))
 model.add(Dense(1, activation = 'sigmoid'))
 
+<<<<<<< Updated upstream
 # Compiling our masterpiece
 model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-6), 
               loss = 'binary_crossentropy', 
               metrics = ['accuracy'])
+=======
+def feature_extractor_fine_tuning(trainimgs, trainlbs, testimgs):
+    
+    # Form the base model
+    base_model = resnet50.ResNet50(include_top = False, weights ='imagenet', input_shape = (224,224,3))
+    inputs = keras.Input(shape=(224,224,3))
+    
+    # Check length of model layers, if desired
+    # print(len(base_model.layers))
+    
+    # Choose which layers to kept frozen or unfrozen
+    for layer in base_model.layers[:155]: # the first 155 layers
+        layer.trainable = False 
+    
+    # Construct the architecture
+    x = inputs                                          # Start with image input
+    x = base_model(x)                                   # pass thru Resnet50
+    x = Flatten()(x)                                    # Flatten (just like above!)
+    x = layers.Dense(256, activation = 'relu')(x)       # Pass thru the dense 256 arch
+    x = layers.Dropout(0.5)(x)                          # Add dropout
+    outputs = layers.Dense(1, activation='sigmoid')(x)  # Final classification layer
+    
+    # Compile and train the model
+    model_FineTune = Model(inputs, outputs)
+    model_FineTune.summary()
+    model_FineTune.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-6), 
+                  loss = 'binary_crossentropy', 
+                  metrics = ['accuracy']) # keep a low learning rate
+    
+    # Perform training. NOTE: takes around 4 min/epoch so be careful!
+    ne = 20
+    batch_size = 16
+    history = model_FineTune.fit(trainimgs, trainlbs, 
+                        validation_split = 0.25, 
+                        epochs = ne, 
+                        verbose = 1,
+                        batch_size = batch_size,
+                        shuffle=True)
+    
+    # Return the results!
+    # On this model, we only need to return the testimages because we're NOT
+    # running them thru the bottleneck first
+    return history, model_FineTune, testimgs, ne
+>>>>>>> Stashed changes
 
 
 """
@@ -348,3 +485,13 @@ print("")
 print(f"Model Accuracy: {acc}, Sensitivity: {Se}, Specificity: {Sp}")
 print(f"True Positive rate: {Pp}, True Negative Rate: {Np}")
 print(f"MICE (0->guessing, 1->perfect classification): {MICE}")
+<<<<<<< Updated upstream
+=======
+print("")
+print(f"True Pos: {n11}, True Neg: {n00}, False Pos: {n01}, False Neg: {n10}")
+
+
+#%% Save off the model, if desired
+model.save("C:\\Users\\cathe\\OneDrive\\Desktop\\WPML\\T9Model_Normalized.keras")
+
+>>>>>>> Stashed changes
