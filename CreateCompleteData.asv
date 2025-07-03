@@ -72,7 +72,7 @@ for i = 1:length(images)
 end
 
 figure
-imshow(processed{100})
+imshow(processed{20})
 
 %disp('Inspect that the BP filtering looks appropriate before saving off video file')
 %% Save off frames to a txt file for classification

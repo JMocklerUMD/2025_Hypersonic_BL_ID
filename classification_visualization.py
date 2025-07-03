@@ -167,7 +167,7 @@ def moving_average(a, n):
 print('Reading training data file')
 
 # Write File Name
-file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\run34\\full_video_data.txt'
+file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\run33_frames92860to111180\\video_data_350_359ms_Run33.txt'
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()
@@ -184,7 +184,7 @@ output = tf.keras.layers.Flatten()(output)
 resnet_model = Model(model1.input,output)
 
 # Load the classifier
-model = keras.models.load_model('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\Run34_normal_NNSize128.keras')
+model = keras.models.load_model('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\filteredLangleyRuns_trained_classifier_RandomSampled.keras')
 
 
 
@@ -271,6 +271,9 @@ for i_iter in range(N_img):
 
 print('Done classifying the video!')
 
+#%% Save the classification results for prop speed calcs
+file_save = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\classification_results_run38_filtered.npy'
+np.save(file_save, confidence_history)
 
 #%% Make history plot
 Nframe_per_img = len(Imagelist)
