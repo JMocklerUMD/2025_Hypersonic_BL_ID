@@ -10,8 +10,8 @@ import tensorflow as tf
 from keras.applications import resnet50
 from keras.models import Model
 
-from keras.preprocessing import image
-from keras.preprocessing.image import load_img
+#from keras.preprocessing import image
+#from keras.preprocessing.image import load_img
 from keras.preprocessing.image import img_to_array
 from keras.preprocessing.image import array_to_img
 
@@ -31,36 +31,7 @@ def img_preprocess(input_image):
     #input_image = (input_image / 127.5) - 1
     return input_image
 
-def get_bottleneck_features(model, input_imgs):
-	print('Getting Feature Data From ResNet...')
-	features = model.predict(input_imgs, verbose = 0)
-	return features
-
-model1 = resnet50.ResNet50(include_top = False, weights ='imagenet', input_shape = (224,224,3))
-output = model1.output
-output = tf.keras.layers.Flatten()(output)
-resnet_model = Model(model1.input,output)
-
-# load the classifier
-model = keras.models.load_model("C:\\Users\\cathe\\OneDrive\\Desktop\\WPML\\T9Model_Normalized.keras")
-
-
-#%% read in images
-print('Reading training data file')
-
-# Write File Name
-file_name ="C:\\Users\\cathe\\OneDrive\\Desktop\\CF_Re45_normalized.txt"
-if os.path.exists(file_name):
-    with open(file_name, 'r') as file:
-        lines = file.readlines()
-else:
-    raise ValueError("No training_data file detected")
-
-lines_len = len(lines)
-print(f"{lines_len} lines read")
-
-
-#%% Split the image into 20 pieces
+# Split the image into 20 pieces
 def image_splitting(i, lines):
     WP_io = []
     #SM_bounds_Array = []
@@ -88,8 +59,8 @@ def image_splitting(i, lines):
     #if full_image.shape != (64, 1280):
     #    print(f"Skipping image at line {i+1} — unexpected size {full_image.shape}")
         #continue
-
-    slice_width = 54
+    
+    slice_width = 64
     height, width = full_image.shape
     num_slices = width // slice_width
     
@@ -129,42 +100,48 @@ def classify_the_images(model, Imagelist):
     Imagelist_res = get_bottleneck_features(resnet_model, Imagelist_resized)
     
     # Pass each through the trained NN
-    test_res= model.predict(Imagelist_res)
+    test_res= model.predict(Imagelist_res, verbose = 0)
     classification_result = np.round(test_res)
     
     return classification_result, test_res
 
+def calc_windowed_confid(j, confidence, window_size):
+    '''
+    Calculates the local confidence (i.e. a single slice of a frame) 
+    via a summed windowing method
+    '''
+    if (j - window_size//2) < 0: # at the front end of the image
+        local_confid = np.sum(confidence[0:j+window_size//2+1:1])
+    elif (j + window_size//2) > len(confidence): # at the end of the image list
+        local_confid = np.sum(confidence[j-window_size//2-1:len(confidence):1])
+    else:
+        local_confid = np.sum(confidence[j-window_size//2:j+window_size//2+1:1])
+        
+    return local_confid
 
-#%% Iterate through the list!
-N_img = lines_len
-acc_history = []
-TP_history = []
-TN_history = []
-FP_history = []
-FN_history = []
-WP_io_history = []
-confidence_history = []
-plot_flag = 1    # View the images? MUCH SLOWER
-
-for i_iter in range(N_img):
-    
-    Imagelist, WP_io, slice_width, height, sm_bounds = image_splitting(i_iter, lines)
-    
-    classification_result, confidence = classify_the_images(model, Imagelist)
-  
-    # Restack and plot the image
-    imageReconstruct = np.hstack([image for image in Imagelist])
-    
-    if plot_flag == 1:
-        fig, ax = plt.subplots(1)
-        ax.imshow(imageReconstruct, cmap = 'gray')
-    
-    # build out the components of a confusion matrix
+def classify_the_frame(Imagelist, confidence, WP_io, window_size, indiv_thres, confid_thres):
     n00, n01, n10, n11 = 0, 0, 0, 0 
-               
-    # Add on classification box rectangles
+    filtered_result = []
+    classification_result = np.zeros(len(Imagelist))
     for i, _ in enumerate(Imagelist):
         
+        # If using the windowed post processing, call the windowing fcn
+        # to get the locally informed confidence. Then compare to thresholds
+        if use_post_process == 1:
+            local_confid = calc_windowed_confid(i, confidence, window_size)
+            
+            # Are window and indiv conditions met?
+            if (local_confid > confid_thres) or (confidence[i] > indiv_thres):
+                filtered_result.append(1)
+            else:
+                filtered_result.append(0)
+            
+            classification_result[i] = filtered_result[i]
+        
+        # If not, then just round
+        else:
+            classification_result[i] = np.round(confidence[i])
+            
         # Get stats on the current image
         if WP_io[i] == 0:
             if classification_result[i] == 0:
@@ -176,25 +153,97 @@ for i_iter in range(N_img):
                 n10 += 1
             if classification_result[i] == 1:
                 n11 += 1
-        
-        # Add in the classification guess
-        if classification_result[i] == 1:
-            rect = Rectangle((i*slice_width, 5), slice_width, height-10, linewidth=0.5, edgecolor='red', facecolor='none')
-            ax.add_patch(rect)
-            
-        # Adds a rectangle for the confidence of classification at every square
-        prob = confidence[i,0]
-        rect = Rectangle((i*slice_width, 5), slice_width, height-10,
-        linewidth=1.0*prob*prob, edgecolor='red', facecolor='none')
-        ax.add_patch(rect)
-        ax.text(i*slice_width, height+40,round(prob,2), fontsize = 7)
-            
-            
-    # Compute the inter-image accuracy
-    acc = (n00 + n11) / (n00 + n11 + n10 + n01)
-    print(f'Image {i_iter}: accuracy = {acc}')
+                
+    return classification_result, filtered_result, n00, n01, n10, n11
+
+def moving_average(a, n):
+    ret = np.cumsum(a, dtype=float)
+    ret[n:] = ret[n:] - ret[:-n]
+    return ret[n - 1:] / n
+
+
+
+#%% Read image and existing classification model into the workspace
+print('Reading training data file')
+
+# Write File Name
+file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\run33_frames92860to111180\\video_data_350_359ms_Run33.txt'
+if os.path.exists(file_name):
+    with open(file_name, 'r') as file:
+        lines = file.readlines()
+else:
+    raise ValueError("No training_data file detected")
+
+lines_len = len(lines)
+print(f"{lines_len} lines read")
+
+# Transfer learning model for stacking on ResNet50
+model1 = resnet50.ResNet50(include_top = False, weights ='imagenet', input_shape = (224,224,3))
+output = model1.output
+output = tf.keras.layers.Flatten()(output)
+resnet_model = Model(model1.input,output)
+
+# Load the classifier
+model = keras.models.load_model('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\filteredLangleyRuns_trained_classifier_RandomSampled.keras')
+
+
+
+#%% Iterate through the list!
+# Initialize some arrays for later data analysis
+N_img = lines_len
+acc_history = []
+TP_history = []
+TN_history = []
+FP_history = []
+FN_history = []
+WP_io_history = []
+confidence_history = []
+filtered_result_history = []
+
+
+plot_flag = 1               # View the images? MUCH SLOWER
+window_size = 3             # Moving window to filter the frames
+indiv_thres = 0.85          # Individual exception threshold
+confid_thres = 1.5          # SUMMED confidence over the entire window. 
+                            # e.g. for 0.5 over 3 windows, make this value 1.5
+use_post_process = 1        # 1 to use windowing post process, 0 if not
+
+### Iterate over all frames in the video
+for i_iter in range(N_img):
     
-    # Save off data for whole-set analysis
+    ### Perform the classification
+    # Split the image and classify the slices
+    Imagelist, WP_io, slice_width, height, sm_bounds = image_splitting(i_iter, lines)
+    simple_class_result, confidence = classify_the_images(model, Imagelist)
+    
+    # Analyze and filter the image results
+    classification_result, filtered_result, n00, n01, n10, n11 = classify_the_frame(Imagelist, confidence, WP_io, window_size, indiv_thres, confid_thres)
+    
+    ### Restitch and display the classification results
+    # Restack and plot the image
+    imageReconstruct = np.hstack([image for image in Imagelist])
+    if plot_flag == 1:
+        fig, ax = plt.subplots(1)
+        ax.imshow(imageReconstruct, cmap = 'gray')
+        
+        # Add on classification box rectangles
+        for i, _ in enumerate(Imagelist):    
+            # Add in the classification guess
+            if classification_result[i] == 1:
+                rect = Rectangle((i*slice_width, 5), slice_width, height-10,
+                                         linewidth=0.5, edgecolor='red', facecolor='none')
+                ax.add_patch(rect)
+                
+            # Adds a rectangle for the filtered_result
+            prob = filtered_result[i]
+            rect = Rectangle((i*slice_width, 5), slice_width, height-10,
+            linewidth=1.0*prob*prob, edgecolor='red', facecolor='none')
+            ax.add_patch(rect)
+            ax.text(i*slice_width, height+80,round(confidence[i,0],2), fontsize = 7)
+            
+            
+    ### Save off the classification results for later analysis
+    acc = (n00 + n11) / (n00 + n11 + n10 + n01)
     TP_history.append(n11)
     TN_history.append(n00)
     FP_history.append(n01)
@@ -202,7 +251,11 @@ for i_iter in range(N_img):
     acc_history.append(acc)
     confidence_history.append(confidence)
     WP_io_history.append(WP_io)
+    filtered_result_history.append(filtered_result)
+    print(f'Frame accuracy: {acc}')
     
+    
+    ### Finally, plot the ground truth
     if plot_flag == 1:
         # Check if there's even a bounding box in the image
         if sm_bounds[0] == 'X':
@@ -216,16 +269,15 @@ for i_iter in range(N_img):
             ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN class')
             plt.show()
 
+print('Done classifying the video!')
+
+#%% Save the classification results for prop speed calcs
+file_save = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\classification_results_run38_filtered.npy'
+np.save(file_save, confidence_history)
+
 #%% Make history plot
-
-# Take a rolling average
-def moving_average(a, n):
-    ret = np.cumsum(a, dtype=float)
-    ret[n:] = ret[n:] - ret[:-n]
-    return ret[n - 1:] / n
-
 Nframe_per_img = len(Imagelist)
-n = 20 # Moving avg window'
+n = 20 # Moving avg window
     
 fig, (pl1, pl2, pl3, pl4, pl5) = plt.subplots(5,1, figsize = (16,16))
 pl1.plot(range(len(acc_history)), acc_history)
@@ -282,7 +334,6 @@ print(f"Whole-set MICE Score: {np.mean(MICE)}")
 
 
 #%% Form an ROC curve
-from sklearn.metrics import roc_curve, auc, precision_recall_curve, average_precision_score
 thresholds = np.linspace(0, 1, num=50)
 TPRs, FPRs, Pres = [], [], []
 # Loop thru the thresholds
@@ -358,6 +409,3 @@ ax2.set_xlabel('Recall (True Positive Rate)')
 ax2.set_ylabel('Precision')
 
 plt.show()
-
-
-
