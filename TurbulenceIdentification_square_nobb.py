@@ -20,7 +20,7 @@ from keras.applications import resnet50, vgg16
 
 from keras.callbacks import EarlyStopping
 
-from keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout, InputLayer
+from keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout, InputLayer, GlobalAveragePooling2D
 
 from keras.models import Model
 from keras.models import Sequential
@@ -57,12 +57,12 @@ if second_mode:
 
 #turbulence currently does not do post-processing
 turb = True
-turb_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\Test1\\run33\\turbulence_training_data.txt"
+turb_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\110000_111000_decimateby1\\Test1\\run33\\CORRECTED_morefullybrokendown_turbulence_training_data.txt"
 turb_N_img = 200
 if turb:
     print('Finding turbulence')
     
-whole_set_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\110000_111000_decimateby1\\Test1\\run33\\video_data.txt"
+whole_set_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\110000_111000_decimateby1\\Test1\\run33\\CORRECTED_morefullybrokendown_turbulence_training_data.txt"
 #"C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\110000_111000_decimateby1\\Test1\\run33\\video_data.txt"
 
 slice_width = 96
@@ -451,6 +451,73 @@ def write_data(file_name, N_img, slice_width):
     
     return trainimgs, testimgs, trainlbs, testlbls, lines_len
 
+#%% bbox code
+#assume only one set of turbulence per image
+def bounding_boxes(pos_frame_filtered,classification_history,slice_width):
+    '''
+    takes the classifications for a true frame and determines bounding boxes
+    only x-values
+    '''
+    i_frame = 0
+    bboxes_abs = []
+    bboxes_best = []
+    for i_iter,result in enumerate(classification_history):
+        frame_num = pos_frame_filtered[i_frame]
+        if i_iter != frame_num or sum(result)==0: #Check to only look at filtered positive frames
+            bboxes_abs.append(['X','X'])
+            bboxes_best.append(['X','X'])
+        else:
+            i_frame = i_frame + 1
+                        
+            possible_bounds = []
+            for i, value in enumerate(result):
+                if value-2>=0.5:
+                    possible_bounds.append(i)
+                    
+            last_slic = -5
+            consec = 1
+            max_consec = 0
+            alt_start = []
+            for _, slic in enumerate(possible_bounds):
+                if last_slic + 1 == slic:
+                    consec = consec + 1
+                if consec > max_consec:
+                    max_consec = consec
+                    start_consec = slic - consec + 1
+                    alt_start = []
+                elif consec == max_consec:
+                    alt_start.append([slic - consec + 1,consec])
+                last_slic = slic
+                    
+            if alt_start == []: #if only one set of slices with the maximum consecutive length
+                bboxes_best.append([start_consec*slice_width,max_consec*slice_width])
+            else: #find set of boxes with highest confidence
+                totals = np.zeros([len(alt_start)+1,])
+                for i, value in enumerate(result):
+                    if i < start_consec + max_consec:
+                        totals[0] = totals[0] + value
+                    else:
+                        for n, start in enumerate(alt_start):
+                            if i < start[0] + start[1]:
+                                totals[n+1] = totals[n+1] + value
+                #find group with highest confidence - takes the leftmost one if tied -  a tie is probably unlikely
+                max_index = np.argmax(totals)
+                if max_index == 0:
+                    final_start = start_consec
+                    final_consec = max_consec
+                else:
+                   final_start = alt_start[max_index-1][0]
+                   final_consec = alt_start[max_index-1][1]
+                bboxes_best.append([final_start*slice_width,final_consec*slice_width])
+                print(final_consec*slice_width)
+    
+            bboxes_abs.append([min(possible_bounds)*slice_width,(max(possible_bounds)-min(possible_bounds))*slice_width+slice_width])
+            print(possible_bounds)
+        if i_frame == len(pos_frame_filtered):
+            break
+
+    return bboxes_abs, bboxes_best
+
 #%% Split the test and train images
 if second_mode:
     trainimgs, testimgs, trainlbs, testlbls, lines_len = write_data(sm_file_name, sm_N_img, slice_width)
@@ -476,7 +543,7 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     # Bringing in ResNet50 to use as our feature extractor
     model1 = resnet50.ResNet50(include_top = False, weights ='imagenet', input_shape = (224,224,3))
     output = model1.output
-    output = tf.keras.layers.Flatten()(output)
+    output = tf.keras.layers.GlobalAveragePooling2D()(output)
     resnet_model = Model(model1.input,output)
 
     # Locking in the weights of the feature detection layers
@@ -506,7 +573,7 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     # Added the classification layers
     model = Sequential()
     model.add(InputLayer(input_shape = (input_shape,)))
-    model.add(Dense(256,                                        # NN dimension            
+    model.add(Dense(128,                                        # NN dimension            
                     activation = 'relu',                        # Activation function at each node
                     input_dim = input_shape,                    # Input controlled by feature vect from ResNet50
                     kernel_regularizer=regularizers.L1L2(l1=1e-4, l2=1e-4),     # Regularization penality term
@@ -516,7 +583,7 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     model.add(Dense(1, activation = 'sigmoid'))     # Add final classification layer
     
     # Compile the NN
-    model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-6), 
+    model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-3), 
                   loss = 'binary_crossentropy', 
                   metrics = ['accuracy'])
     
@@ -524,7 +591,7 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     model.summary()
     
     early_stopping = tf.keras.callbacks.EarlyStopping(
-                                    monitor='val_accuracy',
+                                    monitor='val_loss',
                                     min_delta=0,
                                     patience=5,
                                     verbose=0,
@@ -673,21 +740,30 @@ if turb:
 
 #%% Classification code - stats only for file_name labels!!! (not other classes)
 
-#%%
-def positive_frame():
-    '''
+#%% Frame filtering and bounding box functions (one moved to be closer to the beginning og the code)
+'''
+def positive_frames(pos_frame_hist_raw):
+    
     if the frame has turbulence use this function
     checks if the frames before and after also have turbulence, 
     if so it is likely that this frame has real turbulence,
     if not throw out
-    '''
     
-#assume only one set of turbulence per image
-def bounding_box():
-    '''
-    takes the classifications for a true frame and determines bounding boxes
-    only x-values
-    '''
+    pos_frame_filtered = [pos_frame_hist_raw[0]] #just add the first one
+    
+    for i,frame_num in enumerate(pos_frame_hist_raw):
+        if i == 0:
+            continue
+        if i == len(pos_frame_hist_raw) - 1: #just add the last one
+            pos_frame_filtered.append(frame_num)
+        else:
+            if pos_frame_hist_raw[i-1] == frame_num - 1 and pos_frame_hist_raw[i+1] == frame_num + 1:
+                pos_frame_filtered.append(frame_num)
+
+    #Didn't work when trained on 200 images and deployed on 1000 consecutive run33 images (true positive went from about 4% to about 0.11%)
+            
+    return pos_frame_filtered
+'''    
     
 def pixel_shuffle():
     '''
@@ -697,12 +773,53 @@ def pixel_shuffle():
     tries to make a more accurate bounding box prediction based on that
     '''
     
-def loss():
+def IoU(sm_bounds_history,bboxes):
     '''
     takes the true bounding box and predicted and calculates loss with
-    [insert choosen method here]
+    1D Intersection over Union
     only x-values
     '''
+    iou_array = []
+    for i,bounds in enumerate(sm_bounds_history):
+        if bboxes[i][0] != 'X' and bounds[0] != 'X':
+            x_min = bounds[0]
+            x_max = x_min + bounds[2]
+            x_len = x_max - x_min
+            
+            pred_min = bboxes[i][0]
+            pred_max = pred_min + bboxes[i][1]
+            pred_len = pred_max - pred_min
+            
+            start_intersection = max([x_min,pred_min]) #find rightmost start out of the two bounding boxes
+            end_intersection = min([x_max,pred_max]) #find leftmost end out of the two bounding boxes
+            intersection_len = end_intersection-start_intersection
+            if intersection_len < 0:
+                intersection_len = 0
+                
+            union_len = x_len + pred_len - intersection_len
+        
+            iou_array.append(intersection_len / union_len)
+            
+        '''
+        elif bboxes[i][0] != 'X' or bounds[0] != 'X': #if only one bounding box exist - completely wrong
+            iou_array.append(0)'''
+        
+    iou_metric = sum(iou_array) / len(iou_array)
+    
+    iou_array = [iou for iou in iou_metric if iou != 0]
+    
+    iou_metric_must_overlap = sum(iou_array) / len(iou_array)
+    
+    return iou_metric, iou_metric_must_overlap
+        
+    
+            
+        
+        
+        
+        
+        
+        
 
 
 #%% Read image and existing classification model into the workspace
@@ -721,7 +838,7 @@ print(f"{lines_len} lines read")
 # Transfer learning model for stacking on ResNet50
 model1 = resnet50.ResNet50(include_top = False, weights ='imagenet', input_shape = (224,224,3))
 output = model1.output
-output = tf.keras.layers.Flatten()(output)
+output = tf.keras.layers.GlobalAveragePooling2D()(output)
 resnet_model = Model(model1.input,output)
 
 #no need to load in model - already exists
@@ -738,6 +855,10 @@ WP_io_history = []
 confidence_history = []
 filtered_result_history = []
 classification_history = []
+
+sm_bounds_history = []
+
+pos_frame_hist_raw = []
 
 
 plot_flag = plot_flag       # View the images? MUCH SLOWER
@@ -773,6 +894,13 @@ for i_iter in range(N_frames):
     # Analyze and filter the image results
     classification_result, filtered_result, n00, n01, n10, n11 = classify_the_frame(Imagelist,WP_io, confidence, window_size, indiv_thres,model_turb,Imagelist_res,i_iter, lines, slice_width)
     
+    # look through all frames for positive frames
+    turb_frame = False
+    for i, _ in enumerate(Imagelist):
+        if classification_result[i]-2 >= 0.5:
+            turb_frame = True
+    if turb_frame:
+        pos_frame_hist_raw.append(i_iter)
     
     ### Restitch and display the classification results
     # Restack and plot the image
@@ -804,6 +932,7 @@ for i_iter in range(N_frames):
                 prob = round(confidence[i,0],2)
                 ax.text(i*slice_width+slice_width/5, height+86,f'{prob:.2f}', fontsize = 6)
             
+        
                 
         '''
             # Adds a rectangle for the confidence of classification at every square
@@ -826,35 +955,46 @@ for i_iter in range(N_frames):
     WP_io_history.append(WP_io)
     filtered_result_history.append(filtered_result)
     classification_history.append(classification_result)
+    sm_bounds_history.append(sm_bounds)
     
     
     ### Finally, plot the ground truth
     if plot_flag == 1:
+        
         # Check if there's even a bounding box in the image
         if sm_bounds[0] == 'X':
             if second_mode and turb:
-                ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN WP. Orange: NN Turbulence')
+                ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN WP. Orange: NN Turbulence. Green: abs bbox. Pink: "best" bbox')
             elif second_mode:
-                ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN WP')
+                ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN WP. Green: abs bbox. Pink: "best" bbox')
             else:
-                ax.set_title('Image '+str(i_iter)+'. Blue: Labeled Turbulence')
+                ax.set_title('Image '+str(i_iter)+'. Blue: Labeled Turbulence. Green: abs bbox. Pink: "best" bbox')
             plt.show()
             continue
         else:
             # Add the ground truth over the entire box
             ax.add_patch(Rectangle((sm_bounds[0],sm_bounds[1]), sm_bounds[2], sm_bounds[3], edgecolor='blue', facecolor='none'))
             if second_mode and turb:
-                ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN WP. Orange: NN Turbulence')
+                ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN WP. Orange: NN Turbulence. Green: abs bbox. Pink: "best" bbox')
             elif second_mode:
-                ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN WP')
+                ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN WP. Green: abs bbox. Pink: "best" bbox')
             else:
-                ax.set_title('Image '+str(i_iter)+'. Blue: Labeled Turbulence')
-            plt.show()
+                ax.set_title('Image '+str(i_iter)+'. Blue: Labeled Turbulence. Green: abs bbox. Pink: "best" bbox')
+        bbx_abs,bbx_best = bounding_boxes([0],[classification_result],slice_width)
+        if sm_bounds[1] == 'X':
+            sm_bounds[1] = 0
+        if sm_bounds[3] == 'X':
+            sm_bounds[3] = 64
+        if bbx_abs[0][0] != 'X':
+            ax.add_patch(Rectangle((bbx_abs[0][0],sm_bounds[1]), bbx_abs[0][1], sm_bounds[3], edgecolor='green', facecolor='none'))
+            print(bbx_abs)
+            #ax.add_patch(Rectangle((bbx_best[0][0],sm_bounds[1]), bbx_best[0][1], sm_bounds[3], edgecolor='violet', facecolor='none'))
+        plt.show()
 
 print('Done classifying the video!')
 
 #%% Whole-set stats
-def whole_set_stats(Imagelist,acc_history,TP_history,TN_history,FP_history,FN_history):
+def whole_set_stats(Imagelist,acc_history,TP_history,TN_history,FP_history,FN_history,name):
     
     Nframe_per_img = len(Imagelist)
     n = 20 # Moving avg window
@@ -862,7 +1002,7 @@ def whole_set_stats(Imagelist,acc_history,TP_history,TN_history,FP_history,FN_hi
     fig, (pl1, pl2, pl3, pl4, pl5) = plt.subplots(5,1, figsize = (16,16))
     pl1.plot(range(len(acc_history)), acc_history)
     pl1.plot(range(n-1, len(acc_history)), moving_average(acc_history, n), color='k', linewidth = 2)
-    pl1.set_title('Accuracy')
+    pl1.set_title('Accuracy of ' + name)
     
     pl2.plot(range(len(TP_history)), [img_stat/Nframe_per_img for img_stat in TP_history])
     pl2.plot(range(n-1, len(acc_history)), moving_average(TP_history, n)/Nframe_per_img, color='k', linewidth = 2)
@@ -899,11 +1039,11 @@ def whole_set_stats(Imagelist,acc_history,TP_history,TN_history,FP_history,FN_hi
     ax.plot(range(len(MICE)), MICE)
     ax.plot(range(n-1, len(MICE)), moving_average(MICE, n), color='k', linewidth = 2)
     ax.set_ylim(-1,1)
-    ax.set_title('MICE Performance')
+    ax.set_title('MICE Performance of ' + name)
     
     
     # Print out the entire data set statistics
-    print("Data set statistics")
+    print("Data set statistics of " + name)
     print("----------------------------------------")
     print(f"Whole-set Average: {np.mean(acc_history)}")
     print(f"Whole-set True Positive rate: {np.mean(TP_history)/Nframe_per_img}")
@@ -955,7 +1095,10 @@ def whole_set_stats(Imagelist,acc_history,TP_history,TN_history,FP_history,FN_hi
             FN = FN + n10
             
         # Now calculate the percentages
-        TPRs.append(TP/(TP+FN))
+        if TP + FN == 0:
+            TPRs.append(0)
+        else:
+            TPRs.append(TP/(TP+FN))
         FPRs.append(FP/(FP+TN))
         if (TP+FP) == 0:
             Pres.append(1.0)
@@ -978,7 +1121,7 @@ def whole_set_stats(Imagelist,acc_history,TP_history,TN_history,FP_history,FN_hi
     fig, (ax, ax2) = plt.subplots(1,2, figsize = (16,8))
     ax.plot(FPRs, TPRs, '--.', markersize=10)
     ax.plot(np.linspace(0,1,num=100), np.linspace(0,1,num=100))
-    ax.set_title('ROC Curve')
+    ax.set_title('ROC Curve of ' + name)
     ax.set_xlabel('False Positive Rate')
     ax.set_ylabel('True Positive Rate')
     
@@ -998,13 +1141,46 @@ for n,_ in enumerate(WP_io_history):
 if sum1 !=0: #checks to see if bounding boxes exist
     if second_mode:
         print('Whole-set stats based on Second-mode Waves')
-        whole_set_stats(Imagelist,acc_history,TP_history,TN_history,FP_history,FN_history)
+        whole_set_stats(Imagelist,acc_history,TP_history,TN_history,FP_history,FN_history, '2M WP')
     else:
         print('Whole-set stats based on Turbulence')
-        whole_set_stats(Imagelist,acc_history,TP_history,TN_history,FP_history,FN_history)
+        whole_set_stats(Imagelist,acc_history,TP_history,TN_history,FP_history,FN_history, 'Turbulence')
 else:
     print('Sum of WP_io_history == 0')
     print('Implies that whole-set data has no bounding boxes')
+        
+#%% Run whole-set with processing stats
+'''
+pos_frame_filtered = positive_frames(pos_frame_hist_raw) # find positive frames with surrounding positive frames to try to filter out spurious false positives
+
+pos_frame_iter = 0
+for i in range(len(confidence_history)):
+    pos_frame = pos_frame_filtered[pos_frame_iter] #look for next positive frame
+    if i == pos_frame:
+        pos_frame_iter = pos_frame_iter + 1
+        #change all positive classifications to false
+        TN_history[i] = TN_history[i] + FP_history[i] 
+        FP_history[i] = 0
+        FN_history[i] = FN_history[i] + TP_history[i] 
+        TP_history[i] = 0
+        acc_history[i] = TN_history[i] / (TN_history[i] + FN_history[i])
+    if pos_frame_iter == len(pos_frame_filtered):
+        break
+
+print('Whole-set stats after consecutive frame filtering')
+whole_set_stats(Imagelist,acc_history,TP_history,TN_history,FP_history,FN_history, 'Filtered Turbulence')
+'''
+#%% Find bounding boxes
+bboxes_abs, bboxes_best = bounding_boxes(pos_frame_hist_raw,classification_history,slice_width)
+
+#%% IoU Bounding Box Stats
+iou_abs, iou_abs_must_overlap = IoU(sm_bounds_history,bboxes_abs)
+print(f'IoU from absolute bboxes: {iou_abs}')
+print(f'IoU from absolute bboxes with only overlapping cases: {iou_abs_must_overlap}')
+
+iou_best, iou_best_must_overlap = IoU(sm_bounds_history,bboxes_best)
+print(f'IoU from best value bboxes: {iou_best}')
+print(f'IoU from best value bboxes with only overlapping cases: {iou_best_must_overlap}')
 
 #%% Simple breakdown code
 # if a slice is turbulence check if the slice before it in the previous frame was a WP
