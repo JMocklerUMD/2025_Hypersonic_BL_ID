@@ -409,7 +409,3 @@ ax2.set_xlabel('Recall (True Positive Rate)')
 ax2.set_ylabel('Precision')
 
 plt.show()
-
-
-
-

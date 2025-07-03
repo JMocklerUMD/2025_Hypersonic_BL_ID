@@ -454,4 +454,3 @@ print(f"True Pos: {n11}, True Neg: {n00}, False Pos: {n01}, False Neg: {n10}")
 
 #%% Save off the model, if desired
 model.save('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\Run34_normal_NNSize128.keras')
-
