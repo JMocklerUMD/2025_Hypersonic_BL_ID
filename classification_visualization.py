@@ -184,9 +184,7 @@ output = tf.keras.layers.Flatten()(output)
 resnet_model = Model(model1.input,output)
 
 # Load the classifier
-model = keras.models.load_model('C:\\Users\\Joseph Mockler\\Documents\\GitHub\\2025_Hypersonic_BL_ID\\filteredLangleyRuns_trained_classifier_RandomSampled.keras')
-
-
+model = keras.models.load_model('C:\\Users\\tyler\\Desktop\\NSSSIP25\\TrainedModels\\turb_model_June24_bad.keras')
 
 #%% Iterate through the list!
 # Initialize some arrays for later data analysis
