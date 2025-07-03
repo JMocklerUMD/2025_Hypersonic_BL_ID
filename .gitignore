@@ -12,3 +12,5 @@ training_data_LangleyRun38.txt
 True_class_Re45.npy
 True_class_Run38.npy
 run38_trained_classifier_RandomSampled.keras
+Run34_normal_NNSize128.keras
+filteredLangleyRuns_trained_classifier_RandomSampled.keras
