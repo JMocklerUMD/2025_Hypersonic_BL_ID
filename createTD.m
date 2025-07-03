@@ -122,8 +122,7 @@ while i <= length(images)
 end
 
 %% Write trained data to .txt file
-
-output_file = fullfile(folder_path, 'turbulence_training_data.txt');
+output_file = fullfile(folder_path, 'training_data_filtered.txt');
 fileID = fopen(output_file, 'w');
 
 % only perform if all images are labeled

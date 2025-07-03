@@ -120,6 +120,7 @@ def get_bottleneck_features(model, input_imgs, verbose = 0): #not verbose by def
              input_imgs: (N, 224, 224, 3) numpy array of (224, 224, 3) images to extract features from       
     OUTPUTS: featues:   (N, 100352) numpy array of extracted ResNet50 features
     '''
+
     if input_imgs.shape == (224,224,3): #adds batch dimension for single images
         input_imgs = np.expand_dims(input_imgs, axis=0)                # Shape: (1, 224, 224, 3)
     if verbose == 1:
@@ -154,12 +155,13 @@ def calc_windowed_confid(j, confidence, window_size):
         
     return local_confid
 
+
 # Split the image into 20 pieces
 def image_splitting(i, lines, slice_width):
     WP_io = []
     #SM_bounds_Array = []
     Imagelist = []
-    
+ 
     curr_line = i;
     line = lines[curr_line]
     
@@ -544,6 +546,60 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     # in the later step
     return history, model, testimgs_res, ne
 
+def feature_extractor_fine_tuning(trainimgs, trainlbs, testimgs):
+    """
+    Building the Resnet50 model: a 256-dense NN and the top layers of the ResNet50 model are all trained
+    
+    INPUTS: trainimgs:      (N, 224, 224, 3) numpy array of (224, 224, 3) image slices to train the model.
+            trainlbs:       (N,1) numpy array of binary classes
+            testimgs:       (M, 224, 224, 3) numpy array of (224, 224, 3) image slices to test the model.
+    
+    OUTPUTS: history:       keras NN model training history object
+             model:         BOTH the resnet model and the 256NN model
+             testimgs_res:  (M, 224, 224, 3) array of images, passed back to be compatable with other functions
+             ne:            number of epochs trained
+    """
+    # Form the base model
+    base_model = resnet50.ResNet50(include_top = False, weights ='imagenet', input_shape = (224,224,3))
+    inputs = keras.Input(shape=(224,224,3))
+    
+    # Check length of model layers, if desired
+    # print(len(base_model.layers))
+    
+    # Choose which layers to kept frozen or unfrozen
+    for layer in base_model.layers[:155]: # the first 155 layers
+        layer.trainable = False 
+    
+    # Construct the architecture
+    x = inputs                                          # Start with image input
+    x = base_model(x)                                   # pass thru Resnet50
+    x = Flatten()(x)                                    # Flatten (just like above!)
+    x = layers.Dense(256, activation = 'relu')(x)       # Pass thru the dense 256 arch
+    x = layers.Dropout(0.5)(x)                          # Add dropout
+    outputs = layers.Dense(1, activation='sigmoid')(x)  # Final classification layer
+    
+    # Compile and train the model
+    model_FineTune = Model(inputs, outputs)
+    model_FineTune.summary()
+    model_FineTune.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-6), 
+                  loss = 'binary_crossentropy', 
+                  metrics = ['accuracy']) # keep a low learning rate
+    
+    # Perform training. NOTE: takes around 4 min/epoch so be careful!
+    ne = 20
+    batch_size = 16
+    history = model_FineTune.fit(trainimgs, trainlbs, 
+                        validation_split = 0.25, 
+                        epochs = ne, 
+                        verbose = 1,
+                        batch_size = batch_size,
+                        shuffle=True)
+    
+    # Return the results!
+    # On this model, we only need to return the testimages because we're NOT
+    # running them thru the bottleneck first
+    return history, model_FineTune, testimgs, ne
+  
 #%% Split the test and train images
 start_time = time.time()
 
@@ -553,7 +609,6 @@ if turb:
     trainimgs_turb, testimgs_turb, trainlbs_turb, testlbls_turb, lines_len_turb = write_data(turb_file_name, turb_N_img, slice_width)
 
 
-#%% Finetuning model code was here
 #%% Call fcn to train the model!
 if second_mode:
     history, model, testimgs_res, ne = feature_extractor_training(trainimgs, trainlbs, testimgs)
@@ -675,6 +730,7 @@ if turb:
 #model.save('C:\\Users\\tyler\\Desktop\\NSSSIP25\\TrainedModels\\run33_strangelyhighvalacc_95.keras')
 #model_turb.save('C:\\Users\\tyler\\Desktop\\NSSSIP25\\TrainedModels\\turb_model_June24_bad.keras')
 #print('Model(s) saved')
+
 #%% add in classifer, post processing, and turbulence visualization code below...
 
 #%% Classification code - stats only for file_name labels!!! (not other classes)
@@ -1167,3 +1223,4 @@ if second_mode and turb:
 
     
     plt.show()
+

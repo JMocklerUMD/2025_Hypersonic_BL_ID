@@ -119,7 +119,7 @@ def calc_windowed_confid(j, confidence, window_size):
         
     return local_confid
 
-def classify_the_frame(Imagelist, confidence, window_size, indiv_thres):
+def classify_the_frame(Imagelist, confidence, WP_io, window_size, indiv_thres, confid_thres):
     n00, n01, n10, n11 = 0, 0, 0, 0 
     filtered_result = []
     classification_result = np.zeros(len(Imagelist))
@@ -167,7 +167,7 @@ def moving_average(a, n):
 print('Reading training data file')
 
 # Write File Name
-file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\ConeFlare_Shot67_re45_0deg\\training_data_CF_Re45_FINAL.txt'
+file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\run33_frames92860to111180\\video_data_350_359ms_Run33.txt'
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()
@@ -186,8 +186,6 @@ resnet_model = Model(model1.input,output)
 # Load the classifier
 model = keras.models.load_model('C:\\Users\\tyler\\Desktop\\NSSSIP25\\TrainedModels\\turb_model_June24_bad.keras')
 
-
-
 #%% Iterate through the list!
 # Initialize some arrays for later data analysis
 N_img = lines_len
@@ -201,7 +199,7 @@ confidence_history = []
 filtered_result_history = []
 
 
-plot_flag = 0               # View the images? MUCH SLOWER
+plot_flag = 1               # View the images? MUCH SLOWER
 window_size = 3             # Moving window to filter the frames
 indiv_thres = 0.85          # Individual exception threshold
 confid_thres = 1.5          # SUMMED confidence over the entire window. 
@@ -217,8 +215,7 @@ for i_iter in range(N_img):
     simple_class_result, confidence = classify_the_images(model, Imagelist)
     
     # Analyze and filter the image results
-    classification_result, filtered_result, n00, n01, n10, n11 = classify_the_frame(Imagelist, confidence, window_size, indiv_thres)
-    
+    classification_result, filtered_result, n00, n01, n10, n11 = classify_the_frame(Imagelist, confidence, WP_io, window_size, indiv_thres, confid_thres)
     
     ### Restitch and display the classification results
     # Restack and plot the image
@@ -235,12 +232,12 @@ for i_iter in range(N_img):
                                          linewidth=0.5, edgecolor='red', facecolor='none')
                 ax.add_patch(rect)
                 
-            # Adds a rectangle for the confidence of classification at every square
-            prob = confidence[i,0]
+            # Adds a rectangle for the filtered_result
+            prob = filtered_result[i]
             rect = Rectangle((i*slice_width, 5), slice_width, height-10,
             linewidth=1.0*prob*prob, edgecolor='red', facecolor='none')
             ax.add_patch(rect)
-            ax.text(i*slice_width, height+60,round(prob,2), fontsize = 7)
+            ax.text(i*slice_width, height+80,round(confidence[i,0],2), fontsize = 7)
             
             
     ### Save off the classification results for later analysis
@@ -253,6 +250,8 @@ for i_iter in range(N_img):
     confidence_history.append(confidence)
     WP_io_history.append(WP_io)
     filtered_result_history.append(filtered_result)
+    print(f'Frame accuracy: {acc}')
+    
     
     ### Finally, plot the ground truth
     if plot_flag == 1:
@@ -270,6 +269,9 @@ for i_iter in range(N_img):
 
 print('Done classifying the video!')
 
+#%% Save the classification results for prop speed calcs
+file_save = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\classification_results_run38_filtered.npy'
+np.save(file_save, confidence_history)
 
 #%% Make history plot
 Nframe_per_img = len(Imagelist)
@@ -405,7 +407,3 @@ ax2.set_xlabel('Recall (True Positive Rate)')
 ax2.set_ylabel('Precision')
 
 plt.show()
-
-
-
-
