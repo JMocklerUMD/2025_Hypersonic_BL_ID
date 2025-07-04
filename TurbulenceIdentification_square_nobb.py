@@ -139,20 +139,6 @@ def img_preprocess(input_image):
     #input_image = (input_image / 127.5) - 1
     return processed_image
 
-def calc_windowed_confid(j, confidence, window_size):
-    '''
-    Calculates the local confidence (i.e. a single slice of a frame) 
-    via a summed windowing method
-    '''
-    if (j - window_size//2) < 0: # at the front end of the image
-        local_confid = np.sum(confidence[0:j+window_size//2+1:1])
-    elif (j + window_size//2) > len(confidence): # at the end of the image list
-        local_confid = np.sum(confidence[j-window_size//2-1:len(confidence):1])
-    else:
-        local_confid = np.sum(confidence[j-window_size//2:j+window_size//2+1:1])
-        
-    return local_confid
-
 # Split the image into 20 pieces
 def image_splitting(i, lines, slice_width):
     WP_io = []
@@ -451,73 +437,6 @@ def write_data(file_name, N_img, slice_width):
     
     return trainimgs, testimgs, trainlbs, testlbls, lines_len
 
-#%% bbox code
-#assume only one set of turbulence per image
-def bounding_boxes(pos_frame_filtered,classification_history,slice_width):
-    '''
-    takes the classifications for a true frame and determines bounding boxes
-    only x-values
-    '''
-    i_frame = 0
-    bboxes_abs = []
-    bboxes_best = []
-    for i_iter,result in enumerate(classification_history):
-        frame_num = pos_frame_filtered[i_frame]
-        if i_iter != frame_num or sum(result)==0: #Check to only look at filtered positive frames
-            bboxes_abs.append(['X','X'])
-            bboxes_best.append(['X','X'])
-        else:
-            i_frame = i_frame + 1
-                        
-            possible_bounds = []
-            for i, value in enumerate(result):
-                if value-2>=0.5:
-                    possible_bounds.append(i)
-                    
-            last_slic = -5
-            consec = 1
-            max_consec = 0
-            alt_start = []
-            for _, slic in enumerate(possible_bounds):
-                if last_slic + 1 == slic:
-                    consec = consec + 1
-                if consec > max_consec:
-                    max_consec = consec
-                    start_consec = slic - consec + 1
-                    alt_start = []
-                elif consec == max_consec:
-                    alt_start.append([slic - consec + 1,consec])
-                last_slic = slic
-                    
-            if alt_start == []: #if only one set of slices with the maximum consecutive length
-                bboxes_best.append([start_consec*slice_width,max_consec*slice_width])
-            else: #find set of boxes with highest confidence
-                totals = np.zeros([len(alt_start)+1,])
-                for i, value in enumerate(result):
-                    if i < start_consec + max_consec:
-                        totals[0] = totals[0] + value
-                    else:
-                        for n, start in enumerate(alt_start):
-                            if i < start[0] + start[1]:
-                                totals[n+1] = totals[n+1] + value
-                #find group with highest confidence - takes the leftmost one if tied -  a tie is probably unlikely
-                max_index = np.argmax(totals)
-                if max_index == 0:
-                    final_start = start_consec
-                    final_consec = max_consec
-                else:
-                   final_start = alt_start[max_index-1][0]
-                   final_consec = alt_start[max_index-1][1]
-                bboxes_best.append([final_start*slice_width,final_consec*slice_width])
-                print(final_consec*slice_width)
-    
-            bboxes_abs.append([min(possible_bounds)*slice_width,(max(possible_bounds)-min(possible_bounds))*slice_width+slice_width])
-            print(possible_bounds)
-        if i_frame == len(pos_frame_filtered):
-            break
-
-    return bboxes_abs, bboxes_best
-
 #%% Split the test and train images
 if second_mode:
     trainimgs, testimgs, trainlbs, testlbls, lines_len = write_data(sm_file_name, sm_N_img, slice_width)
@@ -740,7 +659,7 @@ if turb:
 
 #%% Classification code - stats only for file_name labels!!! (not other classes)
 
-#%% Frame filtering and bounding box functions (one moved to be closer to the beginning og the code)
+#%% Frame filtering and bounding box functions
 '''
 def positive_frames(pos_frame_hist_raw):
     
@@ -764,14 +683,84 @@ def positive_frames(pos_frame_hist_raw):
             
     return pos_frame_filtered
 '''    
-    
-def pixel_shuffle():
+#%% bbox code
+#assume only one set of turbulence per image
+def bounding_boxes(pos_frame_filtered,classification_history,slice_width):
     '''
-    takes a positive frame with predicted bounding box values and iterates classifications over it in short pixel intervals
+    takes the classifications for a true frame and determines bounding boxes
+    only x-values
+    '''
+    i_frame = 0
+    bboxes_abs = []
+    bboxes_best = []
+    for i_iter,result in enumerate(classification_history):
+        frame_num = pos_frame_filtered[i_frame]
+        if i_iter != frame_num or sum(result)==0: #Check to only look at filtered positive frames
+            bboxes_abs.append(['X','X'])
+            bboxes_best.append(['X','X'])
+        else:
+            i_frame = i_frame + 1
+                        
+            possible_bounds = []
+            for i, value in enumerate(result):
+                if value-2>=0.5:
+                    possible_bounds.append(i)
+                    
+            last_slic = -5
+            consec = 1
+            max_consec = 0
+            alt_start = []
+            for _, slic in enumerate(possible_bounds):
+                if last_slic + 1 == slic:
+                    consec = consec + 1
+                if consec > max_consec:
+                    max_consec = consec
+                    start_consec = slic - consec + 1
+                    alt_start = []
+                elif consec == max_consec:
+                    alt_start.append([slic - consec + 1,consec])
+                last_slic = slic
+                    
+            if alt_start == []: #if only one set of slices with the maximum consecutive length
+                bboxes_best.append([start_consec*slice_width,max_consec*slice_width])
+            else: #find set of boxes with highest confidence
+                totals = np.zeros([len(alt_start)+1,])
+                for i, value in enumerate(result):
+                    if i < start_consec + max_consec:
+                        totals[0] = totals[0] + value
+                    else:
+                        for n, start in enumerate(alt_start):
+                            if i < start[0] + start[1]:
+                                totals[n+1] = totals[n+1] + value
+                #find group with highest confidence - takes the leftmost one if tied -  a tie is probably unlikely
+                max_index = np.argmax(totals)
+                if max_index == 0:
+                    final_start = start_consec
+                    final_consec = max_consec
+                else:
+                   final_start = alt_start[max_index-1][0]
+                   final_consec = alt_start[max_index-1][1]
+                bboxes_best.append([final_start*slice_width,final_consec*slice_width])
+    
+            bboxes_abs.append([min(possible_bounds)*slice_width,(max(possible_bounds)-min(possible_bounds))*slice_width+slice_width])
+        if i_frame == len(pos_frame_filtered):
+            for repeat in range(len(classification_history)-i_iter-1):
+                bboxes_abs.append(['X','X'])
+                bboxes_best.append(['X','X'])
+            break
+
+    return bboxes_abs, bboxes_best
+    
+def pixel_shuffle(bboxes_abs,Imagelist):
+    '''
+    takes a positive frame with predicted bounding box values (SINGLE frame and SINGLE bbox) and iterates classifications over it in short pixel intervals
     with the typical slice_width
     finds where the classifications drop off by graphing or threshold or matching to function
     tries to make a more accurate bounding box prediction based on that
     '''
+    # 1. take window slightly larger than abs bbox (with safeties to avoid exceeding image boundary)
+    # 2. make an array of image slices within that box every 5 pixels - what to do with rounding errors?
+    
     
 def IoU(sm_bounds_history,bboxes):
     '''
@@ -806,13 +795,37 @@ def IoU(sm_bounds_history,bboxes):
         
     iou_metric = sum(iou_array) / len(iou_array)
     
-    iou_array = [iou for iou in iou_metric if iou != 0]
-    
+    iou_array = [iou for iou in iou_array if iou != 0]
+        
     iou_metric_must_overlap = sum(iou_array) / len(iou_array)
     
     return iou_metric, iou_metric_must_overlap
+
+def post_process(classification_history, window_size = 3, window_thres = 1.5, indiv_thres = 0.85):
+    for i_iter, frame_cls in enumerate(classification_history):
+        confidence = [conf-2 for conf in frame_cls>=2]
+        for i,indiv_cls in enumerate(confidence):
+            local_confid = calc_windowed_confid(i, confidence, window_size)
+            
+            # Are window and indiv conditions met?
+            if (local_confid > confid_thres):
+                classification_history[i_iter][i] = local_confid/3.0 + 2
+    return classification_history
         
-    
+def calc_windowed_confid(j, classification_history, window_size):
+    '''
+    Calculates the local confidence (i.e. a single slice of a frame) 
+    via a summed windowing method
+    j - index of slice within frame
+    '''
+    if (j - window_size//2) < 0: # at the front end of the image
+        local_confid = np.sum(confidence[0:j+window_size//2+1:1])
+    elif (j + window_size//2) > len(confidence): # at the end of the image list
+        local_confid = np.sum(confidence[j-window_size//2-1:len(confidence):1])
+    else:
+        local_confid = np.sum(confidence[j-window_size//2:j+window_size//2+1:1])
+        
+    return local_confid
             
         
         
@@ -1181,6 +1194,17 @@ print(f'IoU from absolute bboxes with only overlapping cases: {iou_abs_must_over
 iou_best, iou_best_must_overlap = IoU(sm_bounds_history,bboxes_best)
 print(f'IoU from best value bboxes: {iou_best}')
 print(f'IoU from best value bboxes with only overlapping cases: {iou_best_must_overlap}')
+
+#%% post process
+print('Post processing...')
+classification_history_post = post_process(classification_history)
+
+#%% run stats on post processed 
+bboxes_abs_post, bboxes_best_post = bounding_boxes(pos_frame_hist_raw,classification_history_post,slice_width)
+
+iou_abs_post, iou_abs_must_overlap_post = IoU(sm_bounds_history,bboxes_abs_post)
+print(f'IoU from absolute bboxes: {iou_abs_post}')
+print(f'IoU from absolute bboxes with only overlapping cases: {iou_abs_must_overlap_post}')
 
 #%% Simple breakdown code
 # if a slice is turbulence check if the slice before it in the previous frame was a WP
