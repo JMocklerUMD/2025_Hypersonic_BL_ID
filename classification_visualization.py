@@ -272,7 +272,7 @@ for i_iter in range(N_img):
 print('Done classifying the video!')
 
 #%% Save the classification results for prop speed calcs
-file_save = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\classification_results_run38_filtered.npy'
+file_save = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\classification_results_run33_filtered.npy'
 np.save(file_save, confidence_history)
 
 #%% Make history plot

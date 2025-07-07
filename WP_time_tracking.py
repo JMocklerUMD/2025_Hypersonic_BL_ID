@@ -17,12 +17,12 @@ import os
 import math
 
 #%% Load classification results + video
-Confidence_history = np.load('C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\classification_results_run38_filtered.npy')
+Confidence_history = np.load('C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\classification_results_run33_filtered.npy')
 
 print('Reading training data file')
 
 # Write File Name
-file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\run38\\video_data_100_109ms_Run33.txt'
+file_name = 'C:\\UMD GRADUATE\\RESEARCH\\Hypersonic Image ID\\videos\\Test1\\run33_frames92860to111180\\video_data_350_359ms_Run33.txt'
 if os.path.exists(file_name):
     with open(file_name, 'r') as file:
         lines = file.readlines()
@@ -155,9 +155,10 @@ window_size = 3
 confid_thres = 1.5
 indiv_thres = 0.9
 use_post_process = 1
+N_Frames_process = 2495
 WP_locs_list = []
 
-for i in range(2495):
+for i in range(N_Frames_process):
     # Start by classifying i'th frame
     Imagelist, WP_io, slice_width, height, sm_bounds = image_splitting(i, lines)
     confidence = Confidence_history[i]
@@ -184,6 +185,11 @@ for i in range(2495):
     start_slice = 0
     stop_slice = 0
     consec = 0
+    
+    # Produce counter
+    if i % 100 == 0:
+        print(f"Frame {i} processed. {i/N_Frames_process}% complete.")
+    
     for j, WP_candidate in enumerate(WP_locs):
         # Determine when we first detect a WP moving left-right
         if WP_candidate > 3 and consec == 0:
@@ -295,7 +301,7 @@ FR = 285e3              # Camera frame rate in Hz
 dt = 1/FR               # time step between frames
 prop_speed_low = 500                # Lower cutoff for assumed prop speed, m/s
 prop_speed_high = 1250              # Upper cutoff for assumed prop speed, m/s
-row_search = 38                     # Row to take measurements through
+row_search = 43                     # Row to take measurements through
 
 pix_tr_low = prop_speed_low * dt * 1/(mm_pix*1e-3)  # Computed number of pixels traveled between frames
 pix_tr_high = prop_speed_high * dt * 1/(mm_pix*1e-3)
@@ -309,12 +315,12 @@ start_lag = -round(pix_tr_high)     # Negative is taken for "backwards" correlat
 stop_lag = -round(pix_tr_low)
 
 # Bandpass filter the frames
-sos = signal.butter(4, [0.0133, 0.080], btype='bandpass', fs=1, output='sos')
+sos = signal.butter(4, [0.0133, 0.1], btype='bandpass', fs=1, output='sos')
 
 convect_speed = []
 convect_breakout = []
-for ii in range(2495):
-    
+for ii in range(N_Frames_process):
+        
     # Pick which WP frames we should analyze
     if ii == 0:
         convect_breakout.append([])
@@ -366,13 +372,15 @@ print(f'Row number: {row_search}')
 print(f'Mean: {mean_speed} +/- {std_dev}')
 #print(convect_breakout)
 
+#plot_analyzed_frames(imageReconstruct1, 43, imageReconstruct2)
+
 # Form a histogram and inspect the results
 counts, bins = np.histogram([prop*mm_pix *1e-3 / dt for prop in convect_speed], bins=20)
 fig, ax1 = plt.subplots(1)
 ax1.stairs(counts, bins)
 ax1.set_xlabel('Measured propagation speed, m/s')
 ax1.set_ylabel('Frequency counts')
-ax1.set_xlim(650, 1000)
+ax1.set_xlim(750, 900)
 plt.show()
 
 
@@ -481,17 +489,17 @@ prop_speed = 850        # A priori estimate of propogation speed
 prop_speed_low = 500                # Lower cutoff for assumed prop speed, m/s
 prop_speed_high = 1250              # Upper cutoff for assumed prop speed, m/s
 
-bl_range_start = 35
-bl_range_end = 55
+bl_range_start = 40
+bl_range_end = 50
 
 pix_tr_low = prop_speed_low * dt * 1/(mm_pix*1e-3)  # Computed number of pixels traveled between frames
 pix_tr_high = prop_speed_high * dt * 1/(mm_pix*1e-3)
 
 # Processing parameters
 use_bandpass_filter = 1 # Use the BP filter? Recommended if not already filtered
-use_windowing_method = 1        # Uses the windowing approach that Dr. Laurence mentioned
+use_windowing_method = 0        # Uses the windowing approach that Dr. Laurence mentioned
 window_size = 64
-use_2D_corr_method = 0          # Uses the 2D correlation approach
+use_2D_corr_method = 1          # Uses the 2D correlation approach
 window_polyfit = 5      # Window for computing convection speed from polyfit
 signal_buffer = 0       # How much extra "slice" should be kept outside of the localized WP?
 corr_max_search = 10    # What range should you search for the max
@@ -499,11 +507,11 @@ start_lag = -round(pix_tr_high)     # Negative is taken for "backwards" correlat
 stop_lag = -round(pix_tr_low)
 
 # Bandpass filter the frames
-sos = signal.butter(4, [0.0133, 0.080], btype='bandpass', fs=1, output='sos')
+sos = signal.butter(4, [0.0133, 0.10], btype='bandpass', fs=1, output='sos')
 
 convect_speed = []
 convect_breakout = []
-for k in range(2495):
+for k in range(N_Frames_process):
     
     # This stuff just does filtering if we should bother analyzing this frame
     if k == 0:
@@ -519,8 +527,8 @@ for k in range(2495):
     starting_WP = WP_loc_ii[0]
     stopping_WP = WP_loc_ii[1]
     
-    start_analysis = max(starting_WP - 2, 0)
-    stop_analysis = min(stopping_WP + 2, 18)
+    start_analysis = max(starting_WP - signal_buffer, 0)
+    stop_analysis = min(stopping_WP + signal_buffer, 18)
     
     # Take two frames where we know WP's exist
     Imagelist1, WP_io, slice_width, height, sm_bounds = image_splitting(k, lines)
@@ -615,7 +623,7 @@ ax1.stairs(counts, bins)
 ax1.set_xlabel('Measured propagation speed, m/s')
 ax1.set_ylabel('Frequency counts')
 #ax1.set_xlim(700, 1000)
-ax1.set_xlim(-1100, -600)
+ax1.set_xlim(-1000, -700)
 plt.show()
 
 #%% Frame reconsturction - 2D
