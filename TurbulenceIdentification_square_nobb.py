@@ -502,7 +502,7 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     model.add(Dense(1, activation = 'sigmoid'))     # Add final classification layer
     
     # Compile the NN
-    model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-3), 
+    model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-6), 
                   loss = 'binary_crossentropy', 
                   metrics = ['accuracy'])
     
@@ -700,11 +700,20 @@ def bounding_boxes(pos_frame_filtered,classification_history,slice_width):
             bboxes_best.append(['X','X'])
         else:
             i_frame = i_frame + 1
+            
+            print(f'result: {result}')
                         
             possible_bounds = []
             for i, value in enumerate(result):
                 if value-2>=0.5:
                     possible_bounds.append(i)
+                    
+            if possible_bounds == []:
+                bboxes_abs.append(['X','X'])
+                bboxes_best.append(['X','X'])
+                continue
+                    
+            print(f'possible_bounds: {possible_bounds}')
                     
             last_slic = -5
             consec = 1
@@ -751,16 +760,107 @@ def bounding_boxes(pos_frame_filtered,classification_history,slice_width):
 
     return bboxes_abs, bboxes_best
     
-def pixel_shuffle(bboxes_abs,Imagelist):
+def pixel_slide(bboxes_abs,Imagelist,lines,pos_frame_filtered,model_turb, resnet_model,slide_val=5):
     '''
-    takes a positive frame with predicted bounding box values (SINGLE frame and SINGLE bbox) and iterates classifications over it in short pixel intervals
+    takes a positive frame with predicted bounding box values and iterates classifications over it in short pixel intervals
     with the typical slice_width
     finds where the classifications drop off by graphing or threshold or matching to function
     tries to make a more accurate bounding box prediction based on that
     '''
     # 1. take window slightly larger than abs bbox (with safeties to avoid exceeding image boundary)
     # 2. make an array of image slices within that box every 5 pixels - what to do with rounding errors?
-    
+    bbxs = copy.deepcopy(bboxes_abs)
+    for _,frame in enumerate(pos_frame_filtered):
+        full_image = whole_image(frame, lines)
+        print(frame)
+        print(bbxs)
+        search_start = bbxs[frame][0]
+        search_end = search_start + bbxs[frame][1] + slice_width
+        height, width = full_image.shape
+        search_start = search_start - slice_width
+        if search_start < 0:
+            search_start = 0
+        if search_end > width - slice_width:
+            search_end = width
+        search_len = search_end - search_start
+        
+        search_array = [] #adds the rightmost slices first
+        for i in range(search_len//5 + 2):
+            if search_end - 5*i - slice_width > 0:
+                search_array.append(search_end - 5*i - slice_width)
+                
+        print(search_array)
+        
+        search_Imagelist = []
+        for i,search_val in enumerate(search_array):
+            x_start = search_val
+            x_end = search_val + slice_width
+        
+            # Slice the image
+            img = full_image[:, x_start:x_end]
+            search_Imagelist.append(img)
+            
+        classification_result, confidence_list, search_Imagelist_res = classify_the_images(model_turb, resnet_model, search_Imagelist, verbose=1)
+        
+        #print(f'confidence_list: {confidence_list}')
+
+        avg_confid = moving_average(confidence_list, 3)
+        
+        #print(f'avg_confid: {avg_confid}')
+        
+        possible_bounds = []
+        for i, value in enumerate(avg_confid):
+            if value>=0.5:
+                possible_bounds.append(i)
+                
+        print(f'possible slide bounds: {possible_bounds}')
+                
+        if possible_bounds == []:
+            bbxs.append(['X','X'])
+            continue
+        
+        last_slic = -5
+        consec = 1
+        max_consec = 0
+        alt_start = []
+        for _, slic in enumerate(possible_bounds):
+            if last_slic + 1 == slic:
+                consec = consec + 1
+            if consec > max_consec:
+                max_consec = consec
+                start_consec = slic - consec + 1
+                alt_start = []
+            elif consec == max_consec:
+                alt_start.append([slic - consec + 1,consec])
+            last_slic = slic
+        
+        if alt_start == []: #if only one set of slices with the maximum consecutive length
+            start_consec = search_array[start_consec]
+            bbxs.append([start_consec*slice_width,max_consec*slice_width])
+        else: #find set of boxes with highest confidence
+            totals = np.zeros([len(alt_start)+1,])
+            for i, value in enumerate(avg_confid):
+                if i < start_consec + max_consec:
+                    totals[0] = totals[0] + value
+                else:
+                    for n, start in enumerate(alt_start):
+                        if i < start[0] + start[1]:
+                            totals[n+1] = totals[n+1] + value
+            #find group with highest confidence - takes the leftmost one if tied -  a tie is probably unlikely
+            max_index = np.argmax(totals)
+            if max_index == 0:
+                final_start = start_consec
+                final_consec = max_consec
+            else:
+               final_start = alt_start[max_index-1][0]
+               final_consec = alt_start[max_index-1][1]
+            final_start = search_array[final_consec]
+            bbxs.append([final_start*slice_width,final_consec*slice_width])
+            
+            print(f'final slide bounds{[final_start*slice_width,final_consec*slice_width]}')
+        
+    return bbxs
+        
     
 def IoU(sm_bounds_history,bboxes):
     '''
@@ -977,31 +1077,36 @@ for i_iter in range(N_frames):
         # Check if there's even a bounding box in the image
         if sm_bounds[0] == 'X':
             if second_mode and turb:
-                ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN WP. Orange: NN Turbulence. Green: abs bbox. Pink: "best" bbox')
+                ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN WP. Orange: NN Turbulence. Green: abs bbox. Pink: "best" bbox. White: sliding window')
             elif second_mode:
-                ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN WP. Green: abs bbox. Pink: "best" bbox')
+                ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN WP. Green: abs bbox. Pink: "best" bbox. White: sliding window')
             else:
-                ax.set_title('Image '+str(i_iter)+'. Blue: Labeled Turbulence. Green: abs bbox. Pink: "best" bbox')
+                ax.set_title('Image '+str(i_iter)+'. Blue: Labeled Turbulence. Green: abs bbox. Pink: "best" bbox. White: sliding window')
             plt.show()
             continue
         else:
             # Add the ground truth over the entire box
             ax.add_patch(Rectangle((sm_bounds[0],sm_bounds[1]), sm_bounds[2], sm_bounds[3], edgecolor='blue', facecolor='none'))
             if second_mode and turb:
-                ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN WP. Orange: NN Turbulence. Green: abs bbox. Pink: "best" bbox')
+                ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN WP. Orange: NN Turbulence. Green: abs bbox. Pink: "best" bbox. White: sliding window')
             elif second_mode:
-                ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN WP. Green: abs bbox. Pink: "best" bbox')
+                ax.set_title('Image '+str(i_iter)+'. Blue: true WP. Red: NN WP. Green: abs bbox. Pink: "best" bbox. White: sliding window')
             else:
-                ax.set_title('Image '+str(i_iter)+'. Blue: Labeled Turbulence. Green: abs bbox. Pink: "best" bbox')
+                ax.set_title('Image '+str(i_iter)+'. Blue: Labeled Turbulence. Green: abs bbox. Pink: "best" bbox. White: sliding window')
         bbx_abs,bbx_best = bounding_boxes([0],[classification_result],slice_width)
         if sm_bounds[1] == 'X':
             sm_bounds[1] = 0
         if sm_bounds[3] == 'X':
             sm_bounds[3] = 64
         if bbx_abs[0][0] != 'X':
-            ax.add_patch(Rectangle((bbx_abs[0][0],sm_bounds[1]), bbx_abs[0][1], sm_bounds[3], edgecolor='green', facecolor='none'))
-            print(bbx_abs)
-            #ax.add_patch(Rectangle((bbx_best[0][0],sm_bounds[1]), bbx_best[0][1], sm_bounds[3], edgecolor='violet', facecolor='none'))
+            #bbx_slide = pixel_slide(bbx_abs,Imagelist,lines,[0],model_turb, resnet_model,slide_val = 5)
+            #ax.add_patch(Rectangle((bbx_abs[0][0],sm_bounds[1]), bbx_abs[0][1], sm_bounds[3], edgecolor='green', facecolor='none'))
+            ax.add_patch(Rectangle((bbx_best[0][0],sm_bounds[1]), bbx_best[0][1], sm_bounds[3], edgecolor='violet', facecolor='none'))
+            #ax.add_patch(Rectangle((bbx_slide[0][0],sm_bounds[1]), bbx_slide[0][1], sm_bounds[3], edgecolor='white', facecolor='none'))
+            #print('bbox results')
+            #print(bbx_abs[0])
+            #print(bbx_slide[0])
+            print('')
         plt.show()
 
 print('Done classifying the video!')
