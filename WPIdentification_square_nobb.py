@@ -63,7 +63,7 @@ turb_N_img = 200
 if turb:
     print('Finding turbulence')
     
-whole_set_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\110000_111000_decimateby1\\Test1\\run33\\video_data.txt"
+whole_set_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\wavepacket_labels_combined.txt"
 #"C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\110000_111000_decimateby1\\Test1\\run33\\video_data.txt"
 
 slice_width = 96
@@ -503,7 +503,7 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     # Added the classification layers
     model = Sequential()
     model.add(InputLayer(input_shape = (input_shape,)))
-    model.add(Dense(256,                                        # NN dimension            
+    model.add(Dense(128,                                        # NN dimension            
                     activation = 'relu',                        # Activation function at each node
                     input_dim = input_shape,                    # Input controlled by feature vect from ResNet50
                     kernel_regularizer=regularizers.L1L2(l1=1e-4, l2=1e-4),     # Regularization penality term
@@ -513,7 +513,7 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     model.add(Dense(1, activation = 'sigmoid'))     # Add final classification layer
     
     # Compile the NN
-    model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-6), 
+    model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-5), 
                   loss = 'binary_crossentropy', 
                   metrics = ['accuracy'])
     
@@ -528,9 +528,10 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
                                     mode='auto',
                                     restore_best_weights=True,
                                 )
-    
     # Train the model! Takes about 20 sec/epoch
     batch_size = 16
+    start = time.time()
+
     history = model.fit(trainimgs_res, trainlbs, 
                         validation_split = 0.25, 
                         epochs = ne, 
@@ -540,6 +541,8 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
                         class_weight = class_weights_dict,
                         #callbacks = [early_stopping]
                         )
+    end = time.time()
+    print(f'time to train = {end-start} seconds')
     
     # Return the results!
     # On this model, we need to return the processed test images for validation 
