@@ -1,51 +1,29 @@
 # Version 2 of a CNN used to identify second-mode waves using ResNet50 for feature extraction
 
-import matplotlib.pyplot as plt
-from matplotlib.widgets import Button
-
-from PIL import Image, ImageChops
-
 import numpy as np
 import os
 import math
 import random
 import time
+import copy
 
-import keras
+import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
 
 import tensorflow as tf
 
-from keras import optimizers, layers, regularizers
+import keras
 
-from keras.applications import resnet50, vgg16
-
+from keras import layers, regularizers
+from keras.applications import resnet50
 from keras.callbacks import EarlyStopping
+from keras.layers import Flatten, Dense, Dropout, InputLayer
+from keras.models import Model, Sequential
 
-from keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout, InputLayer
-
-from keras.models import Model
-from keras.models import Sequential
-
-from keras.preprocessing import image
-
-from keras.preprocessing.image import load_img
-from keras.preprocessing.image import img_to_array
-from keras.preprocessing.image import array_to_img
-
-import matplotlib.pyplot as plt
-
-import h5py
-
-import numpy as np
+from keras.preprocessing.image import img_to_array, array_to_img
 
 from sklearn.model_selection import train_test_split
-from sklearn.svm import SVC
 from sklearn.utils import class_weight
-#import cv2
-
-from matplotlib.patches import Rectangle
-
-import copy
 
 #%% Be able to run Second-Mode Wave detection, Turbulence detection, or both 
 #(both defaults to using Second-Mode Wave detection dataset for labeling and whole-set statistics)
