@@ -57,18 +57,18 @@ if second_mode:
 
 #turbulence currently does not do post-processing
 turb = True
-turb_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\110000_111000_decimateby1\\Test1\\run33\\CORRECTED_morefullybrokendown_turbulence_training_data.txt"
+turb_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\TestPart3_Turbulent\\training_data_filtered.txt"
 turb_N_img = 200
 if turb:
     print('Finding turbulence')
     
-whole_set_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\110000_111000_decimateby1\\Test1\\run33\\CORRECTED_morefullybrokendown_turbulence_training_data.txt"
-#"C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\110000_111000_decimateby1\\Test1\\run33\\video_data.txt"
+whole_set_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\TestPart3_Turbulent\\training_data_filtered.txt"
+#"C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\110000_111000_decimateby1\\Test1\\run33\\CORRECTED_morefullybrokendown_turbulence_training_data.txt"
 
-slice_width = 96
+slice_width = 64
 ne = 20
 
-plot_flag = 0      # View the images? MUCH SLOWER (view - 1, no images - 0)
+plot_flag = 1      # View the images? MUCH SLOWER (view - 1, no images - 0)
 N_frames = -1      # Number of frames to go through for whole-set
                     # If you want the whole-set -> N_frames = -1
 
@@ -502,7 +502,7 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     model.add(Dense(1, activation = 'sigmoid'))     # Add final classification layer
     
     # Compile the NN
-    model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-6), 
+    model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-4), 
                   loss = 'binary_crossentropy', 
                   metrics = ['accuracy'])
     
@@ -700,9 +700,7 @@ def bounding_boxes(pos_frame_filtered,classification_history,slice_width):
             bboxes_best.append(['X','X'])
         else:
             i_frame = i_frame + 1
-            
-            print(f'result: {result}')
-                        
+                                    
             possible_bounds = []
             for i, value in enumerate(result):
                 if value-2>=0.5:
@@ -712,9 +710,7 @@ def bounding_boxes(pos_frame_filtered,classification_history,slice_width):
                 bboxes_abs.append(['X','X'])
                 bboxes_best.append(['X','X'])
                 continue
-                    
-            print(f'possible_bounds: {possible_bounds}')
-                    
+                                        
             last_slic = -5
             consec = 1
             max_consec = 0
@@ -837,6 +833,7 @@ def pixel_slide(bboxes_abs,Imagelist,lines,pos_frame_filtered,model_turb, resnet
         if alt_start == []: #if only one set of slices with the maximum consecutive length
             start_consec = search_array[start_consec]
             bbxs.append([start_consec*slice_width,max_consec*slice_width])
+            print(f'max_consec: {max_consec}')
         else: #find set of boxes with highest confidence
             totals = np.zeros([len(alt_start)+1,])
             for i, value in enumerate(avg_confid):
@@ -856,6 +853,7 @@ def pixel_slide(bboxes_abs,Imagelist,lines,pos_frame_filtered,model_turb, resnet
                final_consec = alt_start[max_index-1][1]
             final_start = search_array[final_consec]
             bbxs.append([final_start*slice_width,final_consec*slice_width])
+            print(f'final_consec: {final_consec}')
             
             print(f'final slide bounds{[final_start*slice_width,final_consec*slice_width]}')
         
@@ -1100,13 +1098,13 @@ for i_iter in range(N_frames):
             sm_bounds[3] = 64
         if bbx_abs[0][0] != 'X':
             #bbx_slide = pixel_slide(bbx_abs,Imagelist,lines,[0],model_turb, resnet_model,slide_val = 5)
-            #ax.add_patch(Rectangle((bbx_abs[0][0],sm_bounds[1]), bbx_abs[0][1], sm_bounds[3], edgecolor='green', facecolor='none'))
+            ax.add_patch(Rectangle((bbx_abs[0][0],sm_bounds[1]), bbx_abs[0][1], sm_bounds[3], edgecolor='green', facecolor='none'))
             ax.add_patch(Rectangle((bbx_best[0][0],sm_bounds[1]), bbx_best[0][1], sm_bounds[3], edgecolor='violet', facecolor='none'))
             #ax.add_patch(Rectangle((bbx_slide[0][0],sm_bounds[1]), bbx_slide[0][1], sm_bounds[3], edgecolor='white', facecolor='none'))
             #print('bbox results')
             #print(bbx_abs[0])
             #print(bbx_slide[0])
-            print('')
+            #print('')
         plt.show()
 
 print('Done classifying the video!')

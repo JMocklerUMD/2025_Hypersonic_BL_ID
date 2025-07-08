@@ -2,7 +2,7 @@
 
 %% Read in and Process Images
 
-folder_path = 'C:\Users\tyler\Desktop\NSSSIP25\CROPPEDrun33\Test1\run33';
+folder_path = "C:\Users\tyler\Desktop\NSSSIP25\CROPPEDrun33\TestPart3_Turbulent";
 
 % read in files in folder
 images = dir(fullfile(folder_path, '*.tif'));
@@ -40,7 +40,7 @@ end
 
 save_file = fullfile(folder_path, 'turbulence_partial_results.mat');
 
-run = 4120; %change to run number
+run = 33; %change to run number
 
 if isfile(save_file)
 
