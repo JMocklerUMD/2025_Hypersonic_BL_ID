@@ -91,7 +91,7 @@ else
 end
 
 i = start_frame;
-while i <= 10%length(images)
+while i <= length(images)
     
     % display image
     img_original=processed{i};
@@ -170,7 +170,7 @@ fileID = fopen(output_file, 'w');
 
 % only perform if all images are labeled
 if 11%i == length(images) + 1 % remove if statement if training stopped early and run section
-    for k = 1:10%length(images)
+    for k = 1:length(images)
 
         % do not record throwaway images
         if results{k,2} == 3
@@ -216,7 +216,7 @@ end
 
 outfolder = 'Labeled Images'; %create this folder inside the orignal folder of .tiff images before running
 
-for i = 1:10%length(images)
+for i = 1:length(images)
 
      if results{i,2} == 3
            continue;
