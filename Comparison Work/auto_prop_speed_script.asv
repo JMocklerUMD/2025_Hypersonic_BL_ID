@@ -1,0 +1,190 @@
+clear; 
+% Main script to run the automated finding propogation speed function
+
+% shot number
+shot = 33;
+img_no = 000000:000019;
+no_ref = 2; %15000 --> directory changed in readImagesLangley.m, parfiles, prop_speed_function.m
+furthest_image = 000020;
+forDisplay = 0;
+percentTurbulent = 0.115;
+base_dir = pwd;
+
+% length scale [mm/pix]
+if sum(33:39 == shot) > 0
+    mm_pix = .0756;
+elseif sum(79 == shot) > 0
+    mm_pix = .0747;
+end
+
+% Addpath of necessary directories
+% need music_identification_v4.m and all associated codes
+% need prop_speed_function.m and filter_notch.m
+%addpath('J:\wave_packet')
+%addpath('J:\wave_packet\parfiles_Langley')
+
+duration = length(img_no); 
+% img_no will be the variable in the 3rd column of the .mat file outputed by the file you load in
+
+methods = ["MUSIC","AutoCorr","FiltImg","STFT", "Wavelet"];
+MUSIC_locs = zeros(2, duration);
+AutoCorr_locs = zeros(2, duration);
+FiltImg_locs = zeros(2, duration);
+STFT_locs = zeros(2, duration);
+Wavelet_locs = zeros(2, duration);
+
+MUSIC_ID = zeros(1, duration);
+AutoCorr_ID = zeros(1, duration);
+FiltImg_ID = zeros(1, duration);
+STFT_ID = zeros(1, duration);
+Wavelet_ID = zeros(1, duration);
+
+
+% Loop thru the methods
+for ii = 1:length(methods)
+
+    tic
+    method = methods(ii);
+    
+    % Loop thru the frames
+    for jj = 1:duration
+    img0 = img_no(jj);
+    
+    if methods(ii) == "STFT" || methods(ii) == "FiltImg"
+        [turbulenceInfo,turbulent1] = extractInfo(img0,shot,no_ref,...
+               furthest_image,percentTurbulent,base_dir);
+    end
+    
+    % Now perform the correct method
+    if method == "MUSIC"
+    [second_mode, packets] = music_identification_v4(shot,img_no(jj),no_ref);
+        if second_mode(1) == 1
+            WP_locs = packets{1};
+            MUSIC_locs(1, jj) = WP_locs(1);
+            MUSIC_locs(2, jj) = WP_locs(2);
+            MUSIC_ID(jj) = 1;
+        else
+            MUSIC_locs(1, jj) = 0;
+            MUSIC_locs(2, jj) = 0;
+            MUSIC_ID(jj) = 0;
+        end
+
+
+    elseif method == "AutoCorr"
+    [second_mode, packets] = autoCorrelationIdentification_v2(shot, img0, no_ref, ...
+                    furthest_image, forDisplay, [], []);
+        if second_mode(1) == 1
+            WP_locs = packets{1};
+            AutoCorr_locs(1, jj) = WP_locs(1);
+            AutoCorr_locs(2, jj) = WP_locs(2);
+            AutoCorr_ID(jj) = 1;
+        else
+            AutoCorr_locs(1, jj) = 0;
+            AutoCorr_locs(2, jj) = 0;
+            AutoCorr_ID(jj) = 0;
+        end
+    
+    elseif method == "FiltImg"
+    [second_mode, packets] = filteredImageIdentification_v2(shot, img0,...
+                     no_ref, furthest_image, forDisplay, turbulenceInfo, turbulent1);
+        if second_mode(1) == 1
+            WP_locs = packets;
+            FiltImg_locs(1, jj) = WP_locs(1);
+            FiltImg_locs(2, jj) = WP_locs(2);
+            FiltImg_ID(jj) = 1;
+        else
+            FiltImg_locs(1, jj) = 0;
+            FiltImg_locs(2, jj) = 0;
+            FiltImg_ID(jj) = 0;
+        end
+
+    elseif method == "STFT"
+    [second_mode, packets] = stft_wavepacket(shot, img_no(jj),...
+                    no_ref, furthest_image, forDisplay, turbulenceInfo, turbulent1);
+        if second_mode(1) == 1
+            WP_locs = packets{1};
+            STFT_locs(1, jj) = WP_locs(1);
+            STFT_locs(2, jj) = WP_locs(2);
+            STFT_ID(jj) = 1;
+        else
+            STFT_locs(1, jj) = 0;
+            STFT_locs(2, jj) = 0;
+            STFT_ID(jj) = 0;
+        end
+
+
+    elseif method == "Wavelet"
+    [second_mode, packets] = waveletDetection_v2(shot, img0, no_ref, ...
+                     furthest_image,0,forDisplay);
+        if second_mode(1) == 1
+            WP_locs = packets{1};
+            Wavelet_locs(1, jj) = WP_locs(1);
+            Wavelet_locs(2, jj) = WP_locs(2);
+            Wavelet_ID(jj) = 1;
+        else
+            Wavelet_locs(1, jj) = 0;
+            Wavelet_locs(2, jj) = 0;
+            Wavelet_ID(jj) = 0;
+        end
+
+    % Catch exceptions
+    else
+        fprintf("Invalid method!")
+        break
+    end
+
+    end % End the image loop
+    toc % Time each method
+
+end % End the methods loop
+
+
+% %%
+% 
+% if second_mode(2)==1
+%     if sum(79 == shot) > 0
+%         col1 = packets{2}(end,1); %run 79 picks up extraneous packets 
+%         col2 = packets{2}(end,2);
+%     else
+%         col1 = packets{2}(1,1);
+%         col2 = packets{2}(1,2);
+%     end
+%     BL;
+%     row1 = BL(2);
+%     row2 = BL(1)-5; %-5 to give slightly buffer from cone edge
+%     cone_height = BL(1);
+% 
+%     if exist('strong_packets','var') == 0
+%         strong_packets = 1;
+%         i=1;
+%     else
+%         strong_packets = strong_packets+1;
+%     end
+% 
+% 
+%     corr_speed(i) = prop_speed_function(shot,img0,col1,col2,row1,row2,mm_pix,cone_height);
+%     i=i+1;
+% end
+% 
+% corr_speed = corr_speed';
+% 
+% %%
+% % clearvars -except corr_speed strong_packets BL
+% % % Eliminate any speeds that show up as greater than the freestream
+% % % velocity. This happens sometimes because of the correlation, but it's
+% % % easy to eliminate because the speed is much greater than it should be 
+% % 
+% % corr_speed = corr_speed';
+% % ind = find(corr_speed > 1500);
+% % corr_speed(ind(1:length(ind))) = [];
+% % avg_speed = mean(corr_speed);
+% % stdev_speed = std(corr_speed);
+% % 
+% % %print to screen
+% % M = ['Number of Usable Speeds = ', num2str(length(corr_speed)), ' out of ', num2str(strong_packets)];
+% % disp(M)
+% % X = ['Average Propagation speed = ',num2str(avg_speed),' m/s']; 
+% % disp(X)
+% % Y = ['Standard Deviation = ',num2str(stdev_speed),' m/s'];
+% % disp(Y)
+
