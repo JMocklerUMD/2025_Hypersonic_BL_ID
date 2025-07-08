@@ -7,57 +7,61 @@ clc; clear; close all
 %% Establish parameters
 
 % Image and control parameters
-row_range = 1:32;           % Rows to keep
-col_range = 1:640;          % Cols to keep
-scale_fact = 20;            % Scale up the final image for contrast?
-flip_image = 1;             % Flip the image to compensate
-use_filtfilt = 0;           % Use MATLAB's filter instead?
-subtract_mean_frame = 1;    % Pre-subtract mean frame? Maybe not necessary?
-
-mm_pix = 0.0756; % Probably don't need this value (cutoffs based on reciprocal pixels, not mm)
+flip_image = 1;       % Flip the image for correct flow direction (to the right)
 boundary_height = 15; % Height of boundary layer in pixels
 
 % Filtering parameters
-cut_low = 2/boundary_height; cut_high = 1/(3*boundary_height);
+cut_low = 1/boundary_height; cut_high = 1/(4*boundary_height);
 order_low = 8; order_high = 8; % Don't do much higher than 8 for numerical stability
 
 %% Load in images and create mean image
 
-folder_path = 'C:\UMD GRADUATE\RESEARCH\Hypersonic Image ID\videos\Test1\ConeFlare_Shot67_re45_0deg';
+folder_path = 'C:\Users\cathe\Documents\MATLAB\trainML\T9Run4120';
+% read in files in folder
 images = dir(fullfile(folder_path, '*.tif'));
+
+% read in image data 
 image_list = cell(1, length(images));
 for i = 1:length(images)
     path = fullfile(folder_path, images(i).name);
     image_list{i} = imread(path);
 end
 
-% Form the mean image
-mean_img = double(image_list{1});
-for i = 2:length(image_list)
-    img = double(image_list{i});
-    mean_img = mean_img + img;
-end
-mean_img = mean_img / length(image_list);
-
-% Background-subtract the frames
 processed = cell(1, length(images));
-for i = 1:length(images)
-    img = double(image_list{i});
-    % Only subtract mean image if selected ahead of time
-    if subtract_mean_frame == 1
-        img = img - mean_img;
+
+for k = 1:100:length(images)
+    batch_end = min(k+99, length(images));
+    % create mean reference image
+    mean_img = double(image_list{k});
+    tot = 1;
+    for i = (k+1):batch_end
+        img = double(image_list{i});
+        mean_img = mean_img + img;
+        tot = tot+1;
     end
-    processed{i} = rescale(img, 0, 1);
-    processed{i} = processed{i}(:,col_range);
+    mean_img = mean_img./ tot;
+    
+    % subtract mean image from others
+    for i = k:batch_end
+        img = double(image_list{i});
+        img = img - mean_img;
+        if flip_image == 1
+            img = flip(img,2);
+        end
+        processed{i} = rescale(img, 0, 1);
+    end
 end
-nimg=length(images);
+
+[rows, cols] = size(mean_img);
+row_range = 1:rows;
+col_range = 1:cols;
 
 %% Filtering
 
-% addpath("C:\Users\rclat\Downloads") % If filter_notch is not on MATLAB path
+% make sure filter_notch.m is in your path
 
 % Filter each image
-for ii = 1:nimg
+for ii = 1:length(images)
   % Set an empty image and read in the current image
   place_holder = zeros(max(row_range), max(col_range));
   In=processed{ii};
@@ -68,9 +72,6 @@ for ii = 1:nimg
     place_holder(jj,:) = vip'; % Populate the new image, row by row
   end
 
-  % Flip across y axis if images come out backwards
-  place_holder = fliplr(place_holder);
-
   % Save off the frame
   If{ii} = place_holder;
   If{ii} = rescale(If{ii},0,1);  
@@ -79,8 +80,6 @@ end
 %% Classification of filtered images 
 
 save_file = fullfile(folder_path, 'filtered_partial_results.mat');
-
-run = 1; % If there are multiple runs to classify, can change this
 
 if isfile(save_file)
 
@@ -92,7 +91,7 @@ else
 end
 
 i = start_frame;
-while i <= length(images)
+while i <= 10%length(images)
     
     % display image
     img_original=processed{i};
@@ -153,7 +152,7 @@ while i <= length(images)
     end
 
     % store results
-    results{i,1} = run;
+    results{i,1} = i;
     results{i,2} = wp;
     img = If{i};
     [rows, cols] = size(img);
@@ -170,8 +169,8 @@ output_file = fullfile(folder_path, 'filtered_training_data.txt');
 fileID = fopen(output_file, 'w');
 
 % only perform if all images are labeled
-if i == length(images) + 1 % remove if statement if training stopped early and run section
-    for k = 1:length(images)
+if 11%i == length(images) + 1 % remove if statement if training stopped early and run section
+    for k = 1:10%length(images)
 
         % do not record throwaway images
         if results{k,2} == 3
@@ -211,4 +210,19 @@ if i == length(images) + 1 % remove if statement if training stopped early and r
     if k == length(images) && isfile(save_file)
         delete(save_file);
     end
+end
+
+%% Save raw, labeled as .tiff to folder
+
+outfolder = 'Labeled Images'; %create this folder inside the orignal folder of .tiff images before running
+
+for i = 1:10%length(images)
+
+     if results{i,2} == 3
+           continue;
+     end
+     img = image_list{i};
+     imgName = sprintf('img_%03d.tiff', i);
+     full_tiff_path = fullfile(outfolder, imgName);
+     imwrite(img, full_tiff_path)
 end
