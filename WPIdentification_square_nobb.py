@@ -66,7 +66,7 @@ if turb:
 whole_set_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\110000_111000_decimateby1\\Test1\\run33\\video_data.txt"
 #"C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\110000_111000_decimateby1\\Test1\\run33\\video_data.txt"
 
-slice_width = 96
+slice_width = 64
 ne = 20
 
 plot_flag = 0      # View the images? MUCH SLOWER (view - 1, no images - 0)
@@ -503,7 +503,7 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     # Added the classification layers
     model = Sequential()
     model.add(InputLayer(input_shape = (input_shape,)))
-    model.add(Dense(256,                                        # NN dimension            
+    model.add(Dense(128,                                        # NN dimension            
                     activation = 'relu',                        # Activation function at each node
                     input_dim = input_shape,                    # Input controlled by feature vect from ResNet50
                     kernel_regularizer=regularizers.L1L2(l1=1e-4, l2=1e-4),     # Regularization penality term
@@ -513,7 +513,7 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     model.add(Dense(1, activation = 'sigmoid'))     # Add final classification layer
     
     # Compile the NN
-    model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-6), 
+    model.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-5), 
                   loss = 'binary_crossentropy', 
                   metrics = ['accuracy'])
     
@@ -574,14 +574,14 @@ def feature_extractor_fine_tuning(trainimgs, trainlbs, testimgs):
     x = inputs                                          # Start with image input
     x = base_model(x)                                   # pass thru Resnet50
     x = Flatten()(x)                                    # Flatten (just like above!)
-    x = layers.Dense(256, activation = 'relu')(x)       # Pass thru the dense 256 arch
+    x = layers.Dense(128, activation = 'relu')(x)       # Pass thru the dense 256 arch
     x = layers.Dropout(0.5)(x)                          # Add dropout
     outputs = layers.Dense(1, activation='sigmoid')(x)  # Final classification layer
     
     # Compile and train the model
     model_FineTune = Model(inputs, outputs)
     model_FineTune.summary()
-    model_FineTune.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-6), 
+    model_FineTune.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-5), 
                   loss = 'binary_crossentropy', 
                   metrics = ['accuracy']) # keep a low learning rate
     
