@@ -55,14 +55,13 @@ row_intensities = median(img, 2);
 row_gradient = gradient(row_intensities);
 
 if dark_cone == 0
-    [~, cone_tip_row] = max(row_gradient);
+    [~, cone_height_top] = max(row_gradient);
 else
-    [~, cone_tip_row] = min(row_gradient);
+    [~, cone_height_top] = min(row_gradient);
 end
 
+cone_height = rows - cone_height_top;
 TopBL = median(heights);
-delta = rows - TopBL;
-cone_height = cone_tip_row - TopBL;
 delta = (rows-cone_height) - TopBL;
 
 fprintf('Top of boundary layer: %.2f (row)\n', TopBL);
@@ -73,7 +72,7 @@ figure;
 imshow(mean_img, []);
 hold on;
 yline(TopBL, 'r--', 'LineWidth', 1.5);
-yline(cone_tip_row, 'r', 'LineWidth', 1.5);
+yline(cone_height_top, 'r', 'LineWidth', 1.5);
 
 
 
