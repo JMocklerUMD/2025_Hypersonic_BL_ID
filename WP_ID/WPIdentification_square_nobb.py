@@ -19,7 +19,6 @@ from keras.applications import resnet50
 from keras.callbacks import EarlyStopping
 from keras.layers import Flatten, Dense, Dropout, InputLayer
 from keras.models import Model, Sequential
-
 from keras.preprocessing.image import img_to_array, array_to_img
 
 from sklearn.model_selection import train_test_split
@@ -66,29 +65,6 @@ if not second_mode and not turb:
 '''
 Function calls used throughout the script.
 '''
-def Shuffler(list1, list2):
-	n1 = list1
-	n2 = list2
-	a = []
-	for i in range(0,len(n1)):
-		temp = [n1[i],n2[i]]
-		a.append(temp)
-	random.shuffle(a)
-	n1new = []
-	n2new = []
-	for i in range(0,len(a)):
-		n1new.append(a[i][0])
-		n2new.append(a[i][1])
-
-	return n1new, n2new
-
-def progress_bar(iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '>', printEnd = "\r"):
-	percent = ("{0:." + str(decimals) + "f}").format(100*(iteration/float(total)))
-	filledLength = int(length*iteration//total)
-	bar = fill*filledLength + '-'*(length - filledLength)
-	print('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix), end = printEnd)
-	if iteration == total:
-		print()
 
 # This function tells our feature extractor to do its thing
 def get_bottleneck_features(model, input_imgs, verbose = 0): #not verbose by default
