@@ -499,60 +499,6 @@ def feature_extractor_training(trainimgs, trainlbs, testimgs):
     # On this model, we need to return the processed test images for validation 
     # in the later step
     return history, model, testimgs_res, ne
-
-def feature_extractor_fine_tuning(trainimgs, trainlbs, testimgs):
-    """
-    Building the Resnet50 model: a 256-dense NN and the top layers of the ResNet50 model are all trained
-    
-    INPUTS: trainimgs:      (N, 224, 224, 3) numpy array of (224, 224, 3) image slices to train the model.
-            trainlbs:       (N,1) numpy array of binary classes
-            testimgs:       (M, 224, 224, 3) numpy array of (224, 224, 3) image slices to test the model.
-    
-    OUTPUTS: history:       keras NN model training history object
-             model:         BOTH the resnet model and the 256NN model
-             testimgs_res:  (M, 224, 224, 3) array of images, passed back to be compatable with other functions
-             ne:            number of epochs trained
-    """
-    # Form the base model
-    base_model = resnet50.ResNet50(include_top = False, weights ='imagenet', input_shape = (224,224,3))
-    inputs = keras.Input(shape=(224,224,3))
-    
-    # Check length of model layers, if desired
-    # print(len(base_model.layers))
-    
-    # Choose which layers to kept frozen or unfrozen
-    for layer in base_model.layers[:155]: # the first 155 layers
-        layer.trainable = False 
-    
-    # Construct the architecture
-    x = inputs                                          # Start with image input
-    x = base_model(x)                                   # pass thru Resnet50
-    x = Flatten()(x)                                    # Flatten (just like above!)
-    x = layers.Dense(128, activation = 'relu')(x)       # Pass thru the dense 256 arch
-    x = layers.Dropout(0.5)(x)                          # Add dropout
-    outputs = layers.Dense(1, activation='sigmoid')(x)  # Final classification layer
-    
-    # Compile and train the model
-    model_FineTune = Model(inputs, outputs)
-    model_FineTune.summary()
-    model_FineTune.compile(optimizer = tf.keras.optimizers.Adam(learning_rate = 1e-5), 
-                  loss = 'binary_crossentropy', 
-                  metrics = ['accuracy']) # keep a low learning rate
-    
-    # Perform training. NOTE: takes around 4 min/epoch so be careful!
-    ne = 20
-    batch_size = 16
-    history = model_FineTune.fit(trainimgs, trainlbs, 
-                        validation_split = 0.25, 
-                        epochs = ne, 
-                        verbose = 1,
-                        batch_size = batch_size,
-                        shuffle=True)
-    
-    # Return the results!
-    # On this model, we only need to return the testimages because we're NOT
-    # running them thru the bottleneck first
-    return history, model_FineTune, testimgs, ne
   
 #%% Split the test and train images
 start_time = time.time()
@@ -566,7 +512,6 @@ if turb:
 #%% Call fcn to train the model!
 if second_mode:
     history, model, testimgs_res, ne = feature_extractor_training(trainimgs, trainlbs, testimgs)
-    #history, model, testimgs_res, ne = feature_extractor_fine_tuning(trainimgs, trainlbs, testimgs)
     print("Second-mode Wave Model Training Complete!")
 
 if turb:
