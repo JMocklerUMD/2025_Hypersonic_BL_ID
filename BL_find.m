@@ -1,25 +1,23 @@
-
-folder_path = 'C:\Users\cathe\Documents\MATLAB\trainML\Re33\Re33';
+image_folder_path = 'C:\Users\cathe\Documents\MATLAB\trainML\Run33'; %folder of raw .tif images
 
 % read in files in folder
-images = dir(fullfile(folder_path, '*.tif'));
+images = dir(fullfile(image_folder_path, '*.tif'));
 
 % read in image data 
 image_list = cell(1, length(images));
 for i = 1:length(images)
-    path = fullfile(folder_path, images(i).name);
-    image_list{i} = imread(path);
+    path = fullfile(image_folder_path, images(i).name);
+    image_list{i} = double(imread(path));
 end
 
-mean_img = double(image_list{1});
-
-for k = 2:length(images)
-    img = double(image_list{k});
+tot = 1;
+mean_img = image_list{1};
+for i = 2:length(images)
+    img = image_list{i};
     mean_img = mean_img + img;
+    tot = tot+1;
 end
-
-mean_img = mean_img./ length(images);
-
+mean_img = mean_img./ tot;
 mean_img = rescale(mean_img, 0, 1);
 figure;
 histogram(mean_img)
@@ -27,7 +25,10 @@ figure;
 imshow(mean_img)
 
 %%
+threshold_scale = 0.12; % gradient threshold, change depending on image set
+dark_cone = 1; % is the cone darker than the rest of the mean image?
 
+%%
 img = mean_img;
 
 [rows, cols] = size(img);
@@ -35,7 +36,7 @@ img = mean_img;
 [Gx, Gy] = gradient(img);
 EdgeMag = sqrt(Gx.^2 + Gy.^2);
 
-threshold = .08 * max(EdgeMag(:));
+threshold = threshold_scale * max(EdgeMag(:));
 
 heights = zeros(1, cols);
 for i = 1:cols
@@ -48,18 +49,31 @@ for i = 1:cols
     end
 end
 
-heights = heights(~isnan(heights));  % remove empty columns
-TopBL = median(heights);  % top of boundary layer
+heights = heights(~isnan(heights));
 
-wall_row = rows;
-delta = wall_row - TopBL;  % boundary layer thickness
+row_intensities = median(img, 2);
+row_gradient = gradient(row_intensities);
+
+if dark_cone == 0
+    [~, cone_tip_row] = max(row_gradient);
+else
+    [~, cone_tip_row] = min(row_gradient);
+end
+
+TopBL = median(heights);
+delta = rows - TopBL;
+cone_height = cone_tip_row - TopBL;
+delta = (rows-cone_height) - TopBL;
 
 fprintf('Top of boundary layer: %.2f (row)\n', TopBL);
-fprintf('Boundary layer thickness: %.2f pixels\n', delta);
+fprintf('Cone height: %.2f pixels\n', cone_height);
+fprintf('True Boundary layer thickness: %.2f pixels\n', delta);
 
 figure;
 imshow(mean_img, []);
 hold on;
-yline(TopBL, 'r', 'LineWidth', 1.5);
+yline(TopBL, 'r--', 'LineWidth', 1.5);
+yline(cone_tip_row, 'r', 'LineWidth', 1.5);
+
 
 
