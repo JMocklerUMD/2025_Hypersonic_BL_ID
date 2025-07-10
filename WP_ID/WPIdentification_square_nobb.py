@@ -653,7 +653,7 @@ output = model1.output
 output = tf.keras.layers.Flatten()(output)
 resnet_model = Model(model1.input,output)
 
-#no need to load in model - already exists
+#no need to load in model - already exists IF trained with above sections
 
 #%% Iterate through the list!
 # Initialize some arrays for later data analysis
