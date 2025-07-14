@@ -13,7 +13,11 @@ import tensorflow as tf
 from keras.applications import resnet50
 from keras.models import Model
 
-# custom libraries
+# add custom libraries
+import sys
+current_dir = os.path.dirname(os.path.abspath(__file__))
+libraries_dir = os.path.join(current_dir, 'Custom Libraries')
+sys.path.append(libraries_dir)
 from processdata import write_data, image_splitting, whole_image
 from stats import model_stats, whole_set_stats
 from classify import classify_the_images, classify_the_frame
