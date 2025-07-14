@@ -43,7 +43,7 @@ whole_set_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\110000
 #"C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\110000_111000_decimateby1\\Test1\\run33\\video_data.txt"
 
 slice_width = 64
-ne = 20
+ne = 5
 
 plot_flag = 0      # View the images? MUCH SLOWER (view - 1, no images - 0)
 N_frames = -1      # Number of frames to go through for whole-set
@@ -78,11 +78,11 @@ if turb:
 
 #%% Call fcn to train the model!
 if second_mode:
-    history, model, ne = feature_extractor_training(trainimgs_res, trainlbs, testimgs_res, ne)
+    history, model, testimgs_res, ne = feature_extractor_training(trainimgs, trainlbs, testimgs, ne)
     print("Second-mode Wave Model Training Complete!")
 
 if turb:
-    history_turb, model_turb, ne_turb = feature_extractor_training(trainimgs_res, trainlbs, testimgs_res, ne)
+    history_turb, model_turb, testimgs_res_turb, ne_turb = feature_extractor_training(trainimgs_turb, trainlbs_turb, testimgs_turb, ne)
     print("Turbulence Model Training Complete!")
 
 end_time = time.time()
@@ -165,12 +165,14 @@ for i_iter in range(N_frames):
         model_turb = 0 #useless input to satisfy classify_the_images inputs if not finding turbulence
     
     # Split the image and classify the slices
-    Imagelist, Imagelist_res, WP_io, slice_width, height, sm_bounds = image_splitting(i_iter, lines, slice_width)
-        
+    Imagelist, WP_io, slice_width, height, sm_bounds = image_splitting(i_iter, lines, slice_width)
+     
+    Imagelist_res = get_bottleneck_features(resnet_model, Imagelist)
+    
     if second_mode:
-        simple_class_result, confidence = classify_the_images(model, resnet_model, Imagelist_res)
+        simple_class_result, confidence = classify_the_images(model, Imagelist_res)
     else:
-        simple_class_result, confidence = classify_the_images(model_turb, resnet_model, Imagelist_res)
+        simple_class_result, confidence = classify_the_images(model_turb, Imagelist_res)
         
     # Analyze and filter the image results
     classification_result, filtered_result, n00, n01, n10, n11 = classify_the_frame(Imagelist,WP_io, confidence, window_size, indiv_thres, confid_thres, model_turb,Imagelist_res,i_iter, lines, slice_width, second_mode, turb, use_post_process)

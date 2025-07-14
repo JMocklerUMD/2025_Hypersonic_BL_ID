@@ -15,9 +15,9 @@ def calc_windowed_confid(j, confidence, window_size):
         
     return local_confid
 
-def classify_the_images(model, resnet_model, Imagelist_res, verbose=0): #not verbose by default
+def classify_the_images(model, Imagelist_res, verbose=0): #not verbose by default
         # Pass each through the trained NN
-        test_res= model.predict(Imagelist_res, verbose = 0)
+        test_res = model.predict(Imagelist_res, verbose = 0)
         classification_result = np.round(test_res)
         return classification_result, test_res, Imagelist_res
 

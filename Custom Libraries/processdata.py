@@ -141,8 +141,8 @@ def write_data(file_name, N_img, slice_width):   # Write training data to requir
 
 def image_splitting(i, lines, slice_width):
     WP_io = []
-    #SM_bounds_Array = []
     Imagelist = []
+    #SM_bounds_Array = []
  
     curr_line = i;
     line = lines[curr_line]
@@ -184,6 +184,7 @@ def image_splitting(i, lines, slice_width):
         # Slice the image
         image = full_image[:, x_start:x_end]
         image_size = image.shape
+        print(Imagelist)
         Imagelist.append(image)
     
         if sm_check.startswith('X'):
@@ -197,9 +198,9 @@ def image_splitting(i, lines, slice_width):
             else:
                 WP_io.append(0)
                 
-        Imagelist_res = np.array([img_preprocess(img) for img in Imagelist])
+        Imagelist = np.array([img_preprocess(img) for img in Imagelist])
                 
-    return Imagelist, Imagelist_res, WP_io, slice_width, height, sm_bounds
+    return Imagelist, WP_io, slice_width, height, sm_bounds
 
 def whole_image(i, lines):
     curr_line = i;
