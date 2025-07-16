@@ -452,7 +452,7 @@ def write_data(file_name, N_img, slice_width):
     
     print("Done Splitting")
     
-    return trainimgs, testimgs, trainlbs, testlbls, lines_len
+    return trainimgs, testimgs, trainlbs, testlbls, lines_len, num_slices
 
 #%% Train the feature extractor model only
 
@@ -607,9 +607,9 @@ def feature_extractor_fine_tuning(trainimgs, trainlbs, testimgs):
 start_time = time.time()
 
 if second_mode:
-    trainimgs, testimgs, trainlbs, testlbls, lines_len = write_data(sm_file_name, sm_N_img, slice_width)
+    trainimgs, testimgs, trainlbs, testlbls, lines_len, num_slices = write_data(sm_file_name, sm_N_img, slice_width)
 if turb:
-    trainimgs_turb, testimgs_turb, trainlbs_turb, testlbls_turb, lines_len_turb = write_data(turb_file_name, turb_N_img, slice_width)
+    trainimgs_turb, testimgs_turb, trainlbs_turb, testlbls_turb, lines_len_turb, num_slices = write_data(turb_file_name, turb_N_img, slice_width)
 
 
 #%% Call fcn to train the model!
@@ -1042,7 +1042,7 @@ else:
 #%% Simple breakdown code
 # if a slice is turbulence check if the slice before it in the previous frame was a WP
 # assumes waves propogate at one slice per frame interval
-
+'''
 where = [] #store where the breakdown occurs
     
 if second_mode and turb: 
@@ -1057,6 +1057,43 @@ if second_mode and turb:
                 if classification_history[(i_iter-1)][(i-1)]: #look back one in time and space to see it a WP preceeded it
                     where.append(i)
     plt.hist(where)
+    plt.show()
+'''
+
+#%% Turbulence intermittency plot (rate of occurance) per slice
+
+# per "Global analysis of nonlinear second-mode development in a Mach-6 boundary layer from high-speed schlieren data"
+# the Schlieren image covers "288.0 mm to 384.7 mm" downstream on the cone
+# based on intermittency plot from that above paper
+
+extent = num_slices*slice_width*mm_pix
+max_extent = 288.0+extent
+
+intermittency = np.zeros(num_slices)
+
+if turb: 
+    ### Iterate over all frames in the video
+    for i_iter in range(N_frames):
+        for i, _ in enumerate(Imagelist):
+            if (classification_history[i_iter][i])-2 > 0.5: #if turbulent...
+                intermittency[i] = intermittency[i] + 1
+    intermittency = intermittency / len(N_frames)
+    
+    x_values = [] # use the middle of slice
+    for x in np.arange(288.0,max_extent,slice_width/2.0):
+        x_values.append(x)
+    
+    plt.scatter(x_values, intermittency)
+    
+    # find linear line of best fit
+    slope, intercept = np.polyfit(x_values, intermittency, 1)
+    line_of_best_fit = slope * x_values + intercept
+    plt.plot(x_values,line_of_best_fit)
+
+    plt.xlabel('Downstream Location (mm)')
+    plt.ylabel('Intermittency')
+    plt.title('Turbulence Intermittency over Cone Length')
+    
     plt.show()
     
 #%% More complex breakdown statistics
