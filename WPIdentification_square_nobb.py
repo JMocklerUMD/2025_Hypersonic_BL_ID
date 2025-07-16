@@ -50,9 +50,9 @@ import copy
 #%% Be able to run Second-Mode Wave detection, Turbulence detection, or both 
 #(both defaults to using Second-Mode Wave detection dataset for labeling and whole-set statistics)
 
-second_mode = False
+second_mode = True
 sm_file_name = "C:\\Users\\tyler\\Desktop\\NSSSIP25\\CROPPEDrun33\\wavepacket_labels_combined.txt"
-sm_N_img = 200
+sm_N_img = 50
 if second_mode:
     print('Finding second-mode waves')
 
@@ -1069,6 +1069,8 @@ if second_mode and turb:
 extent = num_slices*slice_width*mm_pix
 max_extent = 288.0+extent
 
+mm_width = slice_width*mm_pix
+
 intermittency = np.zeros(num_slices)
 
 if turb: 
@@ -1077,22 +1079,35 @@ if turb:
         for i, _ in enumerate(Imagelist):
             if (classification_history[i_iter][i])-2 > 0.5: #if turbulent...
                 intermittency[i] = intermittency[i] + 1
-    intermittency = intermittency / len(N_frames)
+    intermittency = intermittency / N_frames
     
     x_values = [] # use the middle of slice
-    for x in np.arange(288.0,max_extent,slice_width/2.0):
+    for x in np.arange(288.0+mm_width/2.0,max_extent,mm_width):
         x_values.append(x)
+    x_values = np.array(x_values)
     
     plt.scatter(x_values, intermittency)
     
     # find linear line of best fit
     slope, intercept = np.polyfit(x_values, intermittency, 1)
     line_of_best_fit = slope * x_values + intercept
-    plt.plot(x_values,line_of_best_fit)
+    plt.plot(x_values,line_of_best_fit,color='red',linewidth=1)
+    
+    coefficients= np.polyfit(x_values, intermittency, 2)
+    quadratic_function = np.poly1d(coefficients) 
+    x_curve = np.linspace(288.0, max_extent, 144) # more points -> smoother curve
+    y_curve = quadratic_function(x_curve)
+    plt.plot(x_curve,y_curve,color='orange',linewidth=1)
+    
+    coefficients= np.polyfit(x_values, intermittency, 3)
+    quadratic_function = np.poly1d(coefficients) 
+    x_curve = np.linspace(288.0, max_extent, 144) # more points -> smoother curve
+    y_curve = quadratic_function(x_curve)
+    plt.plot(x_curve,y_curve,color='blue',linewidth=1)
 
     plt.xlabel('Downstream Location (mm)')
     plt.ylabel('Intermittency')
-    plt.title('Turbulence Intermittency over Cone Length')
+    plt.title('Turbulence Intermittency over Cone Length \n Line of Best Fits: Red-Linear Orange-Quadratic Blue-Cubic')
     
     plt.show()
     
