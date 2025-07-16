@@ -1121,15 +1121,14 @@ turb_count = 0
 from_count = 0
 dis_trav = []
 wait = 2
-preserve_classification_history = copy.deepcopy(classification_history) #saves a deep copy before overwriting later
 #%%
-#use to reset: classification_history = copy.deepcopy(preserve_classification_history)
+overwritten_cls_hist = copy.deepcopy(classification_history)
 
 if second_mode and turb: 
     #find total number of slices detected as turbulence
     for i_iter in range(N_frames-1,0,-1):
         for i, _ in enumerate(Imagelist):
-            if (classification_history[i_iter][i])-2 > thres:
+            if (overwritten_cls_hist[i_iter][i])-2 > thres:
                 turb_detect_count = turb_detect_count + 1 
                 
     #find breakdown stats
@@ -1139,14 +1138,14 @@ if second_mode and turb:
         for i, _ in enumerate(reversed(Imagelist)): #goes through images starting on the right
             if i <= pro_speed_pix_frame//slice_width-1: #skips the first slice (or multiple if pro. speed is high enough) -- (can't go back in space to check breakdown)
                 continue
-            if (classification_history[i_iter][i])-2 > thres: #if turbulent...
+            if (overwritten_cls_hist[i_iter][i])-2 > thres: #if turbulent...
                 from_second_mode = False
                 turb_count = turb_count + 1
                 i_loop = 1
                 patience = wait #gives additional chance(s) if not detected the first time
                 while patience >= 1:
-                    if classification_history[(i_iter-i_loop)][int(i-pro_speed_pix_frame*i_loop//slice_width)]-2 > thres: #check for preceeding turbulence
-                        #classification_history[(i_iter-i_loop)][int(i-pro_speed_pix_frame*i_loop//slice_width)] = 0 #overwrite to 0 to avoid double counting turbulence
+                    if overwritten_cls_hist[(i_iter-i_loop)][int(i-pro_speed_pix_frame*i_loop//slice_width)]-2 > thres: #check for preceeding turbulence
+                        #overwritten_cls_hist[(i_iter-i_loop)][int(i-pro_speed_pix_frame*i_loop//slice_width)] = 0 #overwrite to 0 to avoid double counting turbulence
                         overwrite.append([i_iter-i_loop, int(i-pro_speed_pix_frame*i_loop//slice_width)])
                         if i-pro_speed_pix_frame*i_loop//slice_width > 0 and i_iter-i_loop>=0: #check to avoid exceeding image bounds and first frame
                             i_loop = i_loop + 1
@@ -1155,7 +1154,7 @@ if second_mode and turb:
                             break
                         if patience < wait:
                             patience = wait #reset additional chance(s) if WP is detected
-                    elif classification_history[(i_iter-i_loop)][int(i-pro_speed_pix_frame*i_loop//slice_width)] == 1: #is it a WP already?
+                    elif overwritten_cls_hist[(i_iter-i_loop)][int(i-pro_speed_pix_frame*i_loop//slice_width)] == 1: #is it a WP already?
                         break
                     else:
                         patience = patience - 1
@@ -1165,7 +1164,7 @@ if second_mode and turb:
                 mark = i_loop
                 patience = wait
                 while patience >= 1:
-                    if classification_history[(i_iter-i_loop)][int(i-pro_speed_pix_frame*i_loop//slice_width)] == 1:
+                    if overwritten_cls_hist[(i_iter-i_loop)][int(i-pro_speed_pix_frame*i_loop//slice_width)] == 1:
                         if i-pro_speed_pix_frame*i_loop//slice_width > 0 and i_iter-i_loop>=0: #check to avoid exceeding image bounds and first frame
                             i_loop = i_loop + 1
                         else:
@@ -1183,7 +1182,7 @@ if second_mode and turb:
                 if i_loop != mark: #checks if turbulence actually came from observed wave packet
                     dis_trav.append((i_loop-mark)*pro_speed_pix_frame)
         for n_i, n_iter in overwrite: #over write at the end of the loop to protect overlaps
-            classification_history[(n_i)][n_iter] = 0
+            overwritten_cls_hist[(n_i)][n_iter] = 0
     
     print(f'Total number of turbulence slices detected: {turb_detect_count}')           
     print(f'Turbulence count (duplicates overwritten): {turb_count}')
@@ -1200,82 +1199,87 @@ if second_mode and turb:
     
 #%% Breakdown visualization
 
-max_i_loop = 0
-cls_his = copy.deepcopy(preserve_classification_history)
-first_turb_frame = True
-store_loc = [] #store relevent slices to add boxes to later 
+cls_his = copy.deepcopy(classification_history)
 
 if second_mode and turb:
-    for i_iter in range(N_frames-1,0,-1): #goes through frames backwards; stops before first image
-        if first_turb_frame == False:
-            i_iter_record = i_iter + 1
-            break
-        else:
-            store_loc = [] #clears if turbulence did not come from wavepacket
-        overwrite = []
-        for i, _ in enumerate(reversed(Imagelist)): #goes through images starting on the right
-            if i <= pro_speed_pix_frame//slice_width-1: #skips the first slice (or multiple if pro. speed is high enough) -- (can't go back in space to check breakdown)
-                continue
-            if (cls_his[i_iter][i])-2 > thres: #if first frame with turbulence
-                store_loc.append([i_iter,i,2]) # 2 is for turbulence
-                i_loop = 1
-                patience = wait #gives additional chance(s) if not detected the first time
-                while patience >= 1:
-                    if cls_his[(i_iter-i_loop)][int(i-pro_speed_pix_frame*i_loop//slice_width)]-2 > thres: #check for preceeding turbulence
-                        overwrite.append([i_iter-i_loop, int(i-pro_speed_pix_frame*i_loop//slice_width)])
-                        if i-pro_speed_pix_frame*i_loop//slice_width > 0 and i_iter-i_loop>=0: #check to avoid exceeding image bounds and first frame
-                            store_loc.append([i_iter-i_loop,int(i-pro_speed_pix_frame*i_loop//slice_width),2]) # 2 is for turbulence
-                            i_loop = i_loop + 1
-                        else:
-                            patience = 0 
-                            break
-                        if patience < wait:
-                            patience = wait #reset additional chance(s) if WP is detected
-                    elif classification_history[(i_iter-i_loop)][int(i-pro_speed_pix_frame*i_loop//slice_width)] == 1: #is it a WP already?
-                        break
-                    else:
-                        patience = patience - 1
-                        i_loop = i_loop + 1
-                if patience<wait: #don't count additional chance(s) that found nothing
-                    i_loop = i_loop+patience-wait
-                patience = wait #gives additional chance(s) if not detected the first time
-                while patience >= 1:
-                    if cls_his[(i_iter-i_loop)][int(i-pro_speed_pix_frame*i_loop//slice_width)] == 1:
-                        first_turb_frame = False #only want propagation that starts from WP and ends in one frame
-                        if i-pro_speed_pix_frame*i_loop//slice_width > 0 and i_iter-i_loop>=0: #check to avoid exceeding image bounds and first frame
-                            i_loop = i_loop + 1
-                            store_loc.append([i_iter-i_loop,int(i-pro_speed_pix_frame*i_loop//slice_width),1]) # 1 is for WP
-                        else:
-                            break
-                        if patience < wait:
-                            patience = wait #reset additional chance(s) if WP is detected
-                    else:
-                        patience = patience - 1
-                        i_loop = i_loop + 1
-                if patience<wait: #don't count additional chance(s) that found nothing
-                    i_loop = i_loop+patience-wait
-                if i_loop > max_i_loop:
-                    max_i_loop = i_loop
-        for n_i, n_iter in overwrite: #over write at the end of the loop to protect overlaps
-            classification_history[(n_i)][n_iter] = 0
-    
-    fig, axs = plt.subplots(max_i_loop+1)
-    fig.suptitle(f'Turbulence and Wavepacket Breakdown\n Red: NN WP. Orange: NN Turbulence\nImages {i_iter_record-max_i_loop} to {i_iter_record}')
-    for n in range(max_i_loop+1):
-        axs[n].imshow(whole_image(n,lines),cmap = 'gray')
-    for m,_ in enumerate(store_loc):
-        if store_loc[m][2] == 1:
-            color = 'red'
-        else:
-            color = 'orange'
-        rect = Rectangle((store_loc[m][1]*slice_width, 5), slice_width, height-10,
-                                 linewidth=0.5, edgecolor=color, facecolor='none')
-        axs[store_loc[m][0]-i_iter_record+max_i_loop].add_patch(rect)
-    
-    #axs[max_i_loop-1].text(store_loc[1][1]*slice_width, 30,round(cls_his[store_loc[max_i_loop-1][0]][store_loc[max_i_loop-1][1]],2), fontsize = 8)
-            
-    #ax.text(i*slice_width, height+60,round(prob,2), fontsize = 7)
 
+    curr_frame = N_frames
+    while curr_frame >= 0:
+        max_i_loop = 0
+        store_loc = [] #store relevent slices to add boxes to later 
+        first_turb_frame = True
+        
+        for i_iter in range(curr_frame-1,0,-1): #goes through frames backwards; stops before first image
+            if first_turb_frame == False:
+                i_iter_record = i_iter + 1
+                break
+            else:
+                store_loc = [] #clears if turbulence did not come from wavepacket
+            overwrite = []
+            for i, _ in enumerate(reversed(Imagelist)): #goes through images starting on the right
+                if i <= pro_speed_pix_frame//slice_width-1: #skips the first slice (or multiple if pro. speed is high enough) -- (can't go back in space to check breakdown)
+                    continue
+                if (cls_his[i_iter][i])-2 > thres: #if first frame with turbulence
+                    store_loc.append([i_iter,i,2]) # 2 is for turbulence
+                    i_loop = 1
+                    patience = wait #gives additional chance(s) if not detected the first time
+                    while patience >= 1:
+                        if cls_his[(i_iter-i_loop)][int(i-pro_speed_pix_frame*i_loop//slice_width)]-2 > thres: #check for preceeding turbulence
+                            overwrite.append([i_iter-i_loop, int(i-pro_speed_pix_frame*i_loop//slice_width)])
+                            if i-pro_speed_pix_frame*i_loop//slice_width > 0 and i_iter-i_loop>=0: #check to avoid exceeding image bounds and first frame
+                                store_loc.append([i_iter-i_loop,int(i-pro_speed_pix_frame*i_loop//slice_width),2]) # 2 is for turbulence
+                                i_loop = i_loop + 1
+                            else:
+                                patience = 0 
+                                break
+                            if patience < wait:
+                                patience = wait #reset additional chance(s) if WP is detected
+                        elif cls_his[(i_iter-i_loop)][int(i-pro_speed_pix_frame*i_loop//slice_width)] == 1: #is it a WP already?
+                            break
+                        else:
+                            patience = patience - 1
+                            i_loop = i_loop + 1
+                    if patience<wait: #don't count additional chance(s) that found nothing
+                        i_loop = i_loop+patience-wait
+                    patience = wait #gives additional chance(s) if not detected the first time
+                    while patience >= 1:
+                        if cls_his[(i_iter-i_loop)][int(i-pro_speed_pix_frame*i_loop//slice_width)] == 1:
+                            first_turb_frame = False #only want propagation that starts from WP and ends in one frame
+                            if i-pro_speed_pix_frame*i_loop//slice_width > 0 and i_iter-i_loop>=0: #check to avoid exceeding image bounds and first frame
+                                i_loop = i_loop + 1
+                                store_loc.append([i_iter-i_loop,int(i-pro_speed_pix_frame*i_loop//slice_width),1]) # 1 is for WP
+                            else:
+                                break
+                            if patience < wait:
+                                patience = wait #reset additional chance(s) if WP is detected
+                        else:
+                            patience = patience - 1
+                            i_loop = i_loop + 1
+                    if patience<wait: #don't count additional chance(s) that found nothing
+                        i_loop = i_loop+patience-wait
+                    if i_loop > max_i_loop:
+                        max_i_loop = i_loop
+            for n_i, n_iter in overwrite: #over write at the end of the loop to protect overlaps
+                cls_his[(n_i)][n_iter] = 0
+        curr_frame = i_iter-1
     
-    plt.show()
+        fig, axs = plt.subplots(max_i_loop+1)
+        fig.suptitle(f'Turbulence and Wavepacket Breakdown\n Red: NN WP. Orange: NN Turbulence\nImages {i_iter_record-max_i_loop} to {i_iter_record}')
+        for n in range(max_i_loop+1):
+            axs[n].imshow(whole_image(n,lines),cmap = 'gray')
+        for m,_ in enumerate(store_loc):
+            if store_loc[m][2] == 1:
+                color = 'red'
+            else:
+                color = 'orange'
+            rect = Rectangle((store_loc[m][1]*slice_width, 5), slice_width, height-10,
+                                     linewidth=0.5, edgecolor=color, facecolor='none')
+            axs[store_loc[m][0]-i_iter_record+max_i_loop].add_patch(rect)
+        
+        #axs[max_i_loop-1].text(store_loc[1][1]*slice_width, 30,round(cls_his[store_loc[max_i_loop-1][0]][store_loc[max_i_loop-1][1]],2), fontsize = 8)
+                
+        #ax.text(i*slice_width, height+60,round(prob,2), fontsize = 7)
+    
+        
+        plt.show()
 
