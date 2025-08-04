@@ -33,7 +33,7 @@ Best-practice usage may be divided into two section: (1) model training and (2) 
    4. Save the keras CNN models! If you're just running the script as an example, these are in **build_Classifier\secondmodemodel_LangleyRun34.keras** and **build_Classifier\turbulencemodel_LangleyRun34.keras**
 6. If you choose to label additional 100-200 frames, you can test this in **Classify_a_video.py** (for just single structure type classification) or **Classify_a_video_SMandTurb.py.** Otherwise, your model is complete!
 
-![/ReadMe Figures/WP_prop.png](https://github.com/JMocklerUMD/2025_Hypersonic_BL_ID/blob/main/ReadMe%20Figures/WP_prop.png)
+![/ReadMe Figures/WP_prop.png](https://github.com/JMocklerUMD/2025_Hypersonic_BL_ID/blob/main/ReadMe%20Figures/classified_ex.png)
 
 ### Model Deployment
 1. Now classify a video of choosing. First, run **video_creation.m** to generate a similar .txt file (this time, without any labels) to read into our software. Some recommended best-practices:
