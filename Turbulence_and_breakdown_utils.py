@@ -252,7 +252,7 @@ def track_slice(N_frames,i_iter,i,result_history,slice_width,PS_pix_frame,overwr
         if patience > 0:
             if i-shift >= 0 and i-shift < len(result_history[0]):
                 shift = shift + int(slice_width//PS_pix_frame)    # shift over which slice is checked based on WP propagation speed
-                if result_history[i_iter][i-shift] == 1:          # if feature detected...
+                if result_history[j_iter][i-shift] == 1:          # if feature detected...  (formerly mistakenly used i_iter instead of j_iter)
                     patience = max_patience                       # reset patience
                     if overwrite:                                 # store overwrite location if applicable
                         i_iter = j_iter
