@@ -1,7 +1,7 @@
 # Hypersonic Boundary Layer Structural Identification
 This code-base uses Keras-implementation transfer learning to automatically identify and localize the existence of second-mode instabilities and turbulence in schlieren video data. We recommend this code for experimental hypersonic boundary layer researchers who are interested in analyzing the statistical properties of such instabilities. Additionally, we have only demonstrated results for second-mode (Mack mode) and fully developed turbulence, but note that first-mode or more transitionary features (such as nonlinear second-mode growth, etc.) could be detected using a similar approach.
 
-We encourage users to read our paper first. ADD HYPERLINK
+We encourage users to read [our paper](https://github.com/JMocklerUMD/2025_Hypersonic_BL_ID/blob/main/USJH_Hypersonic_BL_ID_Preprint.pdf) first.
 
 This project was completed in conjunction with the Army Research Lab, Aberdeen Proving Ground. 
 
