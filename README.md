@@ -7,7 +7,7 @@ This project was completed in conjunction with the Army Research Lab, Aberdeen P
 
 Authors: Joseph Mockler (jmockle1@umd.edu), Catherine Stock (cstock1@terpmail.umd.edu), Chase Latyak (rclatyak@terpmail.umd.edu), Tyler Ostrowski (tylerost@terpmail.umd.edu)
 
-![An example propagating second-mode wave packet detected from our software](/ReadMe Figures/WP_prop.png "A propagating second-mode instability detected by our software")
+![An example propagating second-mode wave packet detected from our software](/ReadMe Figures/WP_prop.png)
 
 ## Usage and Tutorial
 Best-practice usage may be divided into two section: (1) model training and (2) model deployment. Software was developed and tested in spyder, a python IDE; if available, we recommend users run the software through this IDE for best experience.
@@ -33,7 +33,7 @@ Best-practice usage may be divided into two section: (1) model training and (2) 
    4. Save the keras CNN models! If you're just running the script as an example, these are in **build_Classifier\secondmodemodel_LangleyRun34.keras** and **build_Classifier\turbulencemodel_LangleyRun34.keras**
 6. If you choose to label additional 100-200 frames, you can test this in **Classify_a_video.py** (for just single structure type classification) or **Classify_a_video_SMandTurb.py.** Otherwise, your model is complete!
 
-![Example detections](/ReadMe Figures/classified_ex.png "Some example classifications from experiments ranging in flow condition and mach number")
+![Example detections](/ReadMe Figures/classified_ex.png)
 
 ### Model Deployment
 1. Now classify a video of choosing. First, run **video_creation.m** to generate a similar .txt file (this time, without any labels) to read into our software. Some recommended best-practices:
@@ -51,7 +51,7 @@ While none of these are required for pure classification, they showcase some exa
 3. **Visualize_breakdown_sequences.py (experimental)** uses combined classification results to identify sections of the video where the second-mode packet breaks down into fully-developed turbulence within the FOV.
 We encourage researchers contribute additional analysis methods to build out our toolbox!
 
-![An example of an intermittency plot](/ReadMe Figures/intermit_plot.png "Example intermittency plot using our software's estimates of turbulence location estimates.")
+![An example of an intermittency plot](/ReadMe Figures/intermit_plot.png)
 
 
 ## Files
