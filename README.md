@@ -35,11 +35,11 @@ Best-practice usage may be divided into two section: (1) model training and (2) 
 
 ### Model Deployment
 1. Now classify a video of choosing. First, run **video_creation.m** to generate a similar .txt file (this time, without any labels) to read into our software. Some recommended best-practices:
-  1. Use the *same slice size!* The classifier WILL NOT yield useful results unless the slice size used to train is the same here
-  2. Use the *same bandpass filtering limits!*
-  3. You can lightly tune the post-processing limits to get better estimates of locations. Review the paper for more precise definitions of what each does, but in general, larger values are more conservative estimates of structure localization and identification.
+   1. Use the *same slice size!* The classifier WILL NOT yield useful results unless the slice size used to train is the same here
+   2. Use the *same bandpass filtering limits!*
+   3. You can lightly tune the post-processing limits to get better estimates of locations. Review the paper for more precise definitions of what each does, but in general, larger values are more conservative estimates of structure localization and identification.
 2. Save the classification results for more advanced analyses later
-  1. Functionality is already embedded in the script, but this file should be a numpy array of lists corresponding to images (outer list) of classifications of each slice (inner lists)
+   1. Functionality is already embedded in the script, but this file should be a numpy array of lists corresponding to images (outer list) of classifications of each slice (inner lists)
    
 ### Advanced Analysis
 While none of these are required for pure classification, they showcase some example analysis code we've already written and integrated with the classification results. Therefore, we won't present deep detail in each of these, but provide some general functions/guidance for each.
