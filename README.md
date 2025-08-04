@@ -1,4 +1,4 @@
-# 2025_Hypersonic_BL_ID
+# Hypersonic Boundary Layer Structural Identification
 This code-base uses Keras-implementation transfer learning to automatically identify and localize the existence of second-mode instabilities and turbulence in schlieren video data. We recommend this code for experimental hypersonic boundary layer researchers who are interested in analyzing the statistical properties of such instabilities. Additionally, we have only demonstrated results for second-mode (Mack mode) and fully developed turbulence, but note that first-mode or more transitionary features (such as nonlinear second-mode growth, etc.) could be detected using a similar approach.
 
 We encourage users to read our paper first. ADD HYPERLINK
@@ -7,7 +7,7 @@ This project was completed in conjunction with the Army Research Lab, Aberdeen P
 
 Authors: Joseph Mockler (jmockle1@umd.edu), Catherine Stock (cstock1@terpmail.umd.edu), Chase Latyak (rclatyak@terpmail.umd.edu), Tyler Ostrowski (tylerost@terpmail.umd.edu)
 
-ADD PROP WAVE PACKET HERE!
+![/ReadMe Figures/WP_prop.png](https://github.com/JMocklerUMD/2025_Hypersonic_BL_ID/blob/main/ReadMe%20Figures/WP_prop.png)
 
 ## Usage and Tutorial
 Best-practice usage may be divided into two section: (1) model training and (2) model deployment. Software was developed and tested in spyder, a python IDE; if available, we recommend users run the software through this IDE for best experience.
@@ -33,6 +33,8 @@ Best-practice usage may be divided into two section: (1) model training and (2) 
    4. Save the keras CNN models! If you're just running the script as an example, these are in **build_Classifier\secondmodemodel_LangleyRun34.keras** and **build_Classifier\turbulencemodel_LangleyRun34.keras**
 6. If you choose to label additional 100-200 frames, you can test this in **Classify_a_video.py** (for just single structure type classification) or **Classify_a_video_SMandTurb.py.** Otherwise, your model is complete!
 
+![/ReadMe Figures/WP_prop.png](https://github.com/JMocklerUMD/2025_Hypersonic_BL_ID/blob/main/ReadMe%20Figures/classified_ex.png)
+
 ### Model Deployment
 1. Now classify a video of choosing. First, run **video_creation.m** to generate a similar .txt file (this time, without any labels) to read into our software. Some recommended best-practices:
    1. Use the *same slice size!* The classifier WILL NOT yield useful results unless the slice size used to train is the same here
@@ -48,6 +50,8 @@ While none of these are required for pure classification, they showcase some exa
 2. **Intermittency_plot_function.py** accepts the turbulence classification results and computes the turbulence intermittency downstream. 
 3. **Visualize_breakdown_sequences.py (experimental)** uses combined classification results to identify sections of the video where the second-mode packet breaks down into fully-developed turbulence within the FOV.
 We encourage researchers contribute additional analysis methods to build out our toolbox!
+
+![(/ReadMe Figures/intermit_plot.png)](https://github.com/JMocklerUMD/2025_Hypersonic_BL_ID/blob/main/ReadMe%20Figures/intermit_plot.png)
 
 
 ## Files
