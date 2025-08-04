@@ -345,6 +345,137 @@ convect_speed_physical = [prop*mm_pix *1e-3 / dt for prop in convect_speed]
 
 savemat(f"{base_folder}\\Example Data and Outputs\\Prop_speed_calculation\\TESTRun34_histogram_data.mat", {'Run34_convect_speeds': convect_speed_physical})
 
+#%% VI. PERFORM PROP SPEED ANALYSIS VIA OPTICAL FLOW
+# First calculate approx how many pixels a WP will propogate in a single frame
+prop_speed_low = 650                # Lower cutoff for assumed prop speed, m/s
+prop_speed_high = 1000              # Upper cutoff for assumed prop speed, m/s
+
+pix_tr_low = round(prop_speed_low * dt * 1/(mm_pix*1e-3))
+pix_tr_high = round(prop_speed_high * dt * 1/(mm_pix*1e-3))
+
+# Initialize vectors to save measurements
+prop_speed_mps, prop_speed_pix = [], []
+
+# Initialize subroutine lists
+measured_prop = []
+time_vec = []
+sos = signal.butter(4, [0.0133, 0.10], btype='bandpass', fs=1, output='sos')
+print_flag = 0
+
+st_time = time.time()
+N_Frames_process = lines_len - 6 
+for k in range(N_Frames_process):
+    
+    # Print the status
+    if k % 100 == 0:
+        print(f"Frame {k} processed. {100*k/N_Frames_process}% complete.")
+    
+    displacements = []
+    i1, i2 = k, k+1
+    skip_flag = 0
+    
+    # Run the offset-based optical flow calculation to estimate prop speed
+    for offset in range(pix_tr_low,pix_tr_high):
+        
+        fr1_WP = WP_locs_list[i1]
+        fr2_WP = WP_locs_list[i2]
+        
+        # First check if the two consectutative frames actually have WP's
+        if (fr1_WP[1] - fr1_WP[0] == 0) or (fr2_WP[1] - fr2_WP[0] == 0):
+            skip_flag = 1
+            continue
+        
+        # Provide a conservative estimate of the WP bounds because our optical flow 
+        # results should only be looking in the areas of definite WP
+        start_col, stop_col = max(fr1_WP[0], fr2_WP[0])*slice_width, min(fr1_WP[1], fr2_WP[1])*slice_width
+        
+        # Skip if there's no data to look at after the WP searching
+        if stop_col - start_col < 1:
+            skip_flag = 1
+            continue
+        
+        # Only consider a portion of the BL
+        start_row, stop_row = 30, 55
+        
+        # Now read off the frames
+        Imagelist, WP_io, slice_width, height, sm_bounds = image_splitting(i1, lines, slice_width)
+        frame1 = np.hstack(Imagelist)
+    
+        Imagelist, WP_io, slice_width, height, sm_bounds = image_splitting(i2, lines, slice_width)
+        frame2 = np.hstack(Imagelist)
+        
+        # Filter in space
+        row_range = frame1.shape[0]
+        col_range = frame1.shape[1]
+        
+        st_time = time.time()
+        for i in range(row_range):
+            frame1[i,:] = signal.sosfiltfilt(sos, frame1[i,:])
+            frame2[i,:] = signal.sosfiltfilt(sos, frame2[i,:])
+    
+        # Normalize the frame to adjust contrast and convert to 8bit (required by opt. flow implementation)
+        frame1 = np.uint8(cv.normalize(frame1, None, alpha = 0, beta = 255, norm_type = cv.NORM_MINMAX))
+        frame2 = np.uint8(cv.normalize(frame2, None, alpha = 0, beta = 255, norm_type = cv.NORM_MINMAX))
+        
+        # Now only take the regions of the image we care about
+        # Adjust the second frame backwards
+        frame1 = frame1[start_row:stop_row, start_col:stop_col]
+        frame2 = frame2[start_row:stop_row, start_col+offset:stop_col+offset]
+    
+        # now try bringing frame 2 back by the offset
+        frame2[:,start_col:stop_col] = frame2[:,start_col:stop_col+offset]
+        frame2 = np.delete(frame2, slice(stop_col, stop_col+offset), axis = 1)
+        
+        # Compute the optical flow
+        flow = cv.calcOpticalFlowFarneback(frame1, frame2, None, 0.5, 2, 5, 3, 7, 1.1, 0)
+        u = flow[:,:,0]
+        v = flow[:,:,1]
+        end_time = time.time()
+        time_vec.append(end_time-st_time)
+        
+        # Compute the mean flow across the displacements
+        displacements.append(np.median(u))
+        #measured_prop.append(displacements[offset] + offset)
+    
+    # Now compute the linear fit to solve for subpixel displacement
+    if skip_flag == 0:
+        lin_fit = np.polyfit(range(pix_tr_low,pix_tr_high), displacements, 1)
+        est_prop = -lin_fit[1]/lin_fit[0]
+        
+        mm_pix = 0.0756         # From paper
+        FR = 285e3              # Camera frame rate in Hz
+        dt = 1/FR               # time step between frames
+        
+        if print_flag == 1:
+            print(f'Est prop speed: {est_prop} pixels')
+            print(f'Est prop speed: {est_prop*mm_pix*1e-3/dt} m/s')
+            
+        prop_speed_pix.append(est_prop)
+        prop_speed_mps.append(est_prop*mm_pix*1e-3/dt)
+
+# Filter spurious results
+prop_speed_mps_filt = []
+for meas in prop_speed_mps:
+    if meas < -prop_speed_high or meas > -prop_speed_low:
+        continue
+    prop_speed_mps_filt.append(meas)
+    
+counts, bins = np.histogram(prop_speed_mps_filt, 20)
+fig, ax1 = plt.subplots(1)
+ax1.stairs(counts, bins)
+ax1.set_xlabel('Measured propagation speed, m/s')
+ax1.set_ylabel('Frequency counts')
+#ax1.set_xlim(700, 1000)
+#ax1.set_xlim(-1000, -700)
+plt.show()
+
+print(f'Mean: {np.mean(prop_speed_mps_filt)} +/- {np.std(prop_speed_mps_filt)}')
+
+# This forms a slightly more rigorous plot of measured speed vs WP length or confidence
+# Useful for refining results to get better prop speed estimates. 
+convection_confidence_analysis(prop_speed_mps, Confidence_history, WP_locs_list)
+
+
 #%% Save off some figures for poster
 from matplotlib.patches import Rectangle
 start_vid, stop_vid =  980, 1008
