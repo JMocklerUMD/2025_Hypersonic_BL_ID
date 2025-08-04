@@ -21,7 +21,7 @@ Best-practice usage may be divided into two section: (1) model training and (2) 
    4. Only perform this analysis on straight body, schlieren image, hypersonic experiments.
 3. Now run the **final_createTD.m** script to develop the *training data*
    1. Follow the printed instructs in the MATLAB console to label the video.
-   2. Exiting will save your progress. If labelling over a long period, we recommend you exit and save often!
+   2. Exiting will save your progress. If labeling over a long period, we recommend you exit and save often!
    3. Skip frames with MULTIPLE, seperated structures! You CANNOT label multiple boxes on a single frame; therefore, if you only label one structure, the other is implicitly labeled as NOT a structure. Similarly, if you label both and draw a box over regions of NO structure, you overlabel laminar flow!
    4. See **LangleyRun34_filtered_training_data.txt** and **LangleyRun34_turbulence_training_data.txt** for examples of such labeled text files. Additionally, if you want to just test the code, use these as labeled files to avoid gathering and labeling your own data.
    5. You'll have to repeat the labeling process for the types of structures you seek to classify (e.g. if you want to classify second-mode and turbulence, you'll need TWO labeled .txt files)
