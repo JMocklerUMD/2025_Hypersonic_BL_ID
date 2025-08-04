@@ -15,10 +15,10 @@ Best-practice usage may be divided into two section: (1) model training and (2) 
 ### Model training
 1. First, download "Example Data and Outputs.zip" from an associated author (above) and unzip the folder into the working directory
 2. Gather a representative of experimental images to use for *model training*. A few considerations/best-practices:
-  1. Training images should be representative of the video you want to classify. We recommend you randomly sample at least 200-300 frames from the section of video you seek to classify
-  2. Data shouldn't be too sparse: ensure that the structures you want to classify are at least present in the random sample of images (minimum of 5% for each structure type). The model cannot classify structure's it hasn't seen!
-  3. Label an extra ~100-200 frames to validate the data (discussed later).
-  4. Only perform this analysis on straight body, schlieren image, hypersonic experiments.
+   1. Training images should be representative of the video you want to classify. We recommend you randomly sample at least 200-300 frames from the section of video you seek to classify
+   2. Data shouldn't be too sparse: ensure that the structures you want to classify are at least present in the random sample of images (minimum of 5% for each structure type). The model cannot classify structure's it hasn't seen!
+   3. Label an extra ~100-200 frames to validate the data (discussed later).
+   4. Only perform this analysis on straight body, schlieren image, hypersonic experiments.
 3. Now run the **final_createTD.m** script to develop the *training data*
    1. Follow the printed instructs in the MATLAB console to label the video.
    2. Exiting will save your progress. If labelling over a long period, we recommend you exit and save often!
