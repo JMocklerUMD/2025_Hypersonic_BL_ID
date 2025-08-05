@@ -45,7 +45,7 @@ Best-practice usage may be divided into two section: (1) model training and (2) 
    
 ### Advanced Analysis
 While none of these are required for pure classification, they showcase some example analysis code we've already written and integrated with the classification results. Therefore, we won't present deep detail in each of these, but provide some general functions/guidance for each.
-1. **Prop_speed_calculation.py** accepts the second-mode classification results, saved from the previous step, and computes the second-mode instability propagation speed through the BL. There are four example methods of performing the computation: 1D line-based correlation, 2D image-based correlation, quasi-2D based correlation, and 2D optical flow. NOTE: the images MUST be in sequential order!
+1. **Prop_speed_calculation.py** accepts the second-mode confidence classification results, saved from the previous step, and computes the second-mode instability propagation speed through the BL. There are four example methods of performing the computation: 1D line-based correlation, 2D image-based correlation, quasi-2D based correlation, and 2D optical flow. NOTE: the images MUST be in sequential order!
   1. See if you can reproduce the histogram by training your own classifier, classifying an entire video, and running the prop speed calculator!
 2. **Intermittency_plot_function.py** accepts the turbulence classification results and computes the turbulence intermittency downstream. 
 3. **Visualize_breakdown_sequences.py (experimental)** uses combined classification results to identify sections of the video where the second-mode packet breaks down into fully-developed turbulence within the FOV.
